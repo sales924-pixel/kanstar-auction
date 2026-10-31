@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS lots(
   images TEXT NOT NULL DEFAULT '[]',           -- JSON array of /images/... paths
   created_at INTEGER NOT NULL, ends_at INTEGER NOT NULL,
   duration_ms INTEGER NOT NULL, round INTEGER NOT NULL DEFAULT 1,
-  status TEXT NOT NULL DEFAULT 'active'        -- 'active' | 'ended'
+  status TEXT NOT NULL DEFAULT 'active'        -- 'active' | 'ended' | 'removed' (seller-unlisted; history kept)
 );
 CREATE TABLE IF NOT EXISTS bidders(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -229,6 +229,7 @@ async function stateFromIp(ip) {
 
 /* --------------------------- lot lifecycle --------------------------- */
 function finalizeLot(lot) {
+  if (lot.status !== 'active') return; // removed lots never finalize/reopen
   const top = topBid(lot.id, lot.round);
   if (top) {
     db.prepare('INSERT OR IGNORE INTO wins(lot_id,round,bidder_id,amount_cents,created_at) VALUES(?,?,?,?,?)')
@@ -399,14 +400,14 @@ const server = http.createServer(async (req, res) => {
     /* ------------------------------ API ------------------------------ */
     if (p === '/api/lots' && req.method === 'GET') {
       lifecycleSweep();
-      const lots = db.prepare('SELECT * FROM lots ORDER BY zone DESC, ends_at ASC').all().map(publicLot);
+      const lots = db.prepare("SELECT * FROM lots WHERE status != 'removed' ORDER BY zone DESC, ends_at ASC").all().map(publicLot);
       return sendJson(res, 200, { now: now(), lots });
     }
     if (p.startsWith('/api/lots/') && req.method === 'GET') {
       lifecycleSweep();
       const id = Number(p.split('/')[3]);
       const lot = db.prepare('SELECT * FROM lots WHERE id=?').get(id);
-      if (!lot) return sendJson(res, 404, { error: 'not_found' });
+      if (!lot || lot.status === 'removed') return sendJson(res, 404, { error: 'not_found' });
       return sendJson(res, 200, { now: now(), lot: publicLot(lot) });
     }
     if (p === '/api/track' && req.method === 'POST') {
@@ -622,6 +623,16 @@ const server = http.createServer(async (req, res) => {
         for (const e of emails) logNotification('daily_new', e.email, r.lastInsertRowid, `New lot listed: "${title}".`);
         return sendJson(res, 200, { ok: true, lot_id: r.lastInsertRowid });
       }
+      if (p.startsWith('/api/seller/lots/') && req.method === 'DELETE') {
+        // Unlist a lot: it vanishes from the public site and stops cycling
+        // (lifecycleSweep only touches 'active' lots). Bids/wins/orders rows
+        // are kept — history and existing orders stay readable.
+        const id = Number(p.split('/')[4]);
+        const lot = db.prepare('SELECT id, status FROM lots WHERE id=?').get(id);
+        if (!lot) return sendJson(res, 404, { error: 'not_found' });
+        if (lot.status !== 'removed') db.prepare("UPDATE lots SET status='removed' WHERE id=?").run(id);
+        return sendJson(res, 200, { ok: true, lot_id: id, status: 'removed' });
+      }
       if (p === '/api/seller/inbox' && req.method === 'GET') {
         const msgs = db.prepare('SELECT * FROM messages ORDER BY created_at DESC LIMIT 200').all();
         const unread = db.prepare('SELECT COUNT(*) AS c FROM messages WHERE is_read=0').get().c;
@@ -674,7 +685,7 @@ const server = http.createServer(async (req, res) => {
           hourly[h].visitors = one('SELECT COUNT(DISTINCT visitor_id) AS c FROM events WHERE created_at>=? AND created_at<?',
             ds + h * 3600000, ds + (h + 1) * 3600000);
         }
-        const byLot = db.prepare(`SELECT l.id, l.title, l.images,
+        const byLot = db.prepare(`SELECT l.id, l.title, l.images, l.status, l.zone,
             (SELECT COUNT(*) FROM events e WHERE e.type='lot' AND e.lot_id=l.id) AS views,
             (SELECT COUNT(*) FROM bids b WHERE b.lot_id=l.id) AS bids
           FROM lots l ORDER BY views DESC, bids DESC LIMIT 30`).all()
