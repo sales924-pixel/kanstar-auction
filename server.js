@@ -22,6 +22,14 @@ const WAREHOUSE = '1065 S Vail Ave, Montebello, CA 90640';
 const FREE_SHIP_THRESHOLD_CENTS = 2000; // shipping free at/above $20 winning bid
 const SHIP_FEE_CENTS = 500;             // otherwise +$5
 
+/* Stripe Checkout (env-gated): with no STRIPE_SECRET_KEY set, checkout is
+ * record-only exactly as before. Keys come from the host's env, never the repo. */
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_PUBLISHABLE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const SITE_URL = (process.env.SITE_URL || 'https://kanstarus.com').replace(/\/+$/, '');
+const STRIPE_ENABLED = !!STRIPE_SECRET_KEY;
+
 /* Seller passcode: only a scrypt hash lives here (plaintext never stored). */
 const SELLER_SALT = '0d3b93e87f0e184c783d780c4164442a';
 const SELLER_HASH = 'da9b9a6959639c6996549dfc75783906dcc3b359345342f4e4e8fc3c7c14aaa608c651fd97d813b8e3aee1d8ae8abf451aa7c2147b86f68d518c60535a36fa0a';
@@ -108,7 +116,8 @@ CREATE TABLE IF NOT EXISTS orders(
   dest_state TEXT DEFAULT '', address TEXT DEFAULT '',
   item_cents INTEGER NOT NULL, shipping_cents INTEGER NOT NULL,
   tax_cents INTEGER NOT NULL, total_cents INTEGER NOT NULL,
-  created_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'awaiting_contact'
+  created_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'awaiting_contact',
+  stripe_session_id TEXT DEFAULT '', paid_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS messages(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,6 +143,13 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
 CREATE INDEX IF NOT EXISTS idx_bids_lot ON bids(lot_id, round, amount_cents DESC);
 CREATE INDEX IF NOT EXISTS idx_events_time ON events(created_at);
 `);
+/* Migrations for databases created before Stripe support. */
+function ensureColumn(table, col, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((r) => r.name);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`);
+}
+ensureColumn('orders', 'stripe_session_id', "TEXT DEFAULT ''");
+ensureColumn('orders', 'paid_at', 'INTEGER');
 
 /* ------------------------------ seed lots ---------------------------- */
 const img = (lot, n) => Array.from({ length: n }, (_, i) => `/images/lot-${String(lot).padStart(2, '0')}/${String(i + 1).padStart(2, '0')}.jpg`);
@@ -278,6 +294,15 @@ function readBody(req) {
     req.on('error', reject);
   });
 }
+function readRawBody(req) { // exact bytes — required for webhook HMAC verification
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let len = 0;
+    req.on('data', (c) => { len += c.length; if (len > 12 * 1024 * 1024) req.destroy(); chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
 function parseCookies(req) {
   const out = {};
   for (const part of (req.headers.cookie || '').split(';')) {
@@ -302,6 +327,70 @@ function validUsPhone(p) {
   return d.length === 10 || (d.length === 11 && d.startsWith('1'));
 }
 function sellerAuth(req) { return verifyPasscode(req.headers['x-seller-passcode'] || ''); }
+
+/* ------------------------------ Stripe ------------------------------- */
+function stripeEncode(params) { // Stripe REST API takes form-encoded bracket notation
+  const pairs = [];
+  const walk = (key, val) => {
+    if (val === undefined || val === null) return;
+    if (Array.isArray(val)) { val.forEach((v, i) => walk(`${key}[${i}]`, v)); return; }
+    if (typeof val === 'object') { for (const [k, v] of Object.entries(val)) walk(`${key}[${k}]`, v); return; }
+    pairs.push(`${key}=${encodeURIComponent(String(val))}`);
+  };
+  for (const [k, v] of Object.entries(params)) walk(k, v);
+  // Stripe substitutes the literal {CHECKOUT_SESSION_ID} placeholder in success_url
+  return pairs.join('&').replace(/%7BCHECKOUT_SESSION_ID%7D/g, '{CHECKOUT_SESSION_ID}');
+}
+async function stripeApi(method, pathName, params) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000); // a hung network must never stall checkout
+  try {
+    const r = await fetch(`https://api.stripe.com/v1${pathName}`, {
+      method,
+      signal: ctrl.signal,
+      headers: {
+        'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
+        ...(params ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
+      },
+      body: params ? stripeEncode(params) : undefined,
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const e = new Error((j.error && j.error.message) || `stripe_http_${r.status}`);
+      e.stripeError = j.error || null;
+      throw e;
+    }
+    return j;
+  } finally { clearTimeout(timer); }
+}
+function verifyStripeSignature(rawBody, sigHeader, secret) {
+  if (!sigHeader || !secret) return false;
+  let t = null;
+  const v1s = [];
+  for (const part of String(sigHeader).split(',')) {
+    const i = part.indexOf('=');
+    if (i < 0) continue;
+    const k = part.slice(0, i).trim();
+    const val = part.slice(i + 1).trim();
+    if (k === 't') t = val;
+    if (k === 'v1') v1s.push(val);
+  }
+  if (!t || !v1s.length) return false;
+  const ts = Number(t);
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false; // 5-minute tolerance
+  const expected = crypto.createHmac('sha256', secret).update(`${t}.`).update(rawBody).digest('hex');
+  const expBuf = Buffer.from(expected);
+  return v1s.some((v1) => {
+    const b = Buffer.from(v1);
+    return b.length === expBuf.length && crypto.timingSafeEqual(b, expBuf);
+  });
+}
+function markOrderPaid(orderId, sessionId) {
+  const o = db.prepare('SELECT stripe_session_id FROM orders WHERE id=?').get(orderId);
+  if (!o) return;
+  db.prepare("UPDATE orders SET status='paid', paid_at=?, stripe_session_id=? WHERE id=?")
+    .run(now(), sessionId || o.stripe_session_id || '', orderId);
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -406,11 +495,74 @@ const server = http.createServer(async (req, res) => {
       const item = win.amount_cents;
       const shipping = method === 'pickup' ? 0 : (item >= FREE_SHIP_THRESHOLD_CENTS ? 0 : SHIP_FEE_CENTS);
       const tax = (method === 'pickup' || state === 'CA') ? money(item * TAX_RATE_CA) : 0;
-      const r = db.prepare(`INSERT INTO orders(win_id,lot_id,buyer_name,buyer_email,phone,method,dest_state,address,item_cents,shipping_cents,tax_cents,total_cents,created_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(win.id, win.lot_id, bidder.name, bidder.email, String(body.phone).trim(), method,
-        method === 'pickup' ? 'CA' : state, String(body.address || '').trim(), item, shipping, tax, item + shipping + tax, now());
-      db.prepare('UPDATE wins SET order_id=? WHERE id=?').run(r.lastInsertRowid, win.id);
-      return sendJson(res, 200, { ok: true, order_id: r.lastInsertRowid, item_cents: item, shipping_cents: shipping, tax_cents: tax, total_cents: item + shipping + tax });
+      const total = item + shipping + tax;
+      const r = db.prepare(`INSERT INTO orders(win_id,lot_id,buyer_name,buyer_email,phone,method,dest_state,address,item_cents,shipping_cents,tax_cents,total_cents,created_at,status)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(win.id, win.lot_id, bidder.name, bidder.email, String(body.phone).trim(), method,
+        method === 'pickup' ? 'CA' : state, String(body.address || '').trim(), item, shipping, tax, total, now(),
+        STRIPE_ENABLED ? 'pending_payment' : 'awaiting_contact');
+      const orderId = Number(r.lastInsertRowid);
+      db.prepare('UPDATE wins SET order_id=? WHERE id=?').run(orderId, win.id);
+      const base = { ok: true, order_id: orderId, item_cents: item, shipping_cents: shipping, tax_cents: tax, total_cents: total };
+      if (!STRIPE_ENABLED) return sendJson(res, 200, base); // record-only mode (no keys configured)
+      try {
+        const session = await stripeApi('POST', '/checkout/sessions', {
+          mode: 'payment',
+          customer_email: bidder.email,
+          line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: total, product_data: { name: `${win.title} — Kanstar Daily Auction` } } }],
+          metadata: { order_id: String(orderId) },
+          success_url: `${SITE_URL}/?paid=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${SITE_URL}/?pay_cancelled=${orderId}`,
+        });
+        db.prepare('UPDATE orders SET stripe_session_id=? WHERE id=?').run(session.id, orderId);
+        return sendJson(res, 200, { ...base, checkout_url: session.url });
+      } catch (e) {
+        // Order stays 'pending_payment' so the seller can see and follow up; never crash checkout.
+        console.error(`[stripe] session create failed for order ${orderId}: ${e.message}`);
+        return sendJson(res, 502, { error: 'payment_unavailable', order_id: orderId });
+      }
+    }
+    if (p === '/api/stripe/webhook' && req.method === 'POST') {
+      const raw = await readRawBody(req);
+      if (!STRIPE_WEBHOOK_SECRET) {
+        console.error('[stripe] webhook received but STRIPE_WEBHOOK_SECRET is not set');
+        return sendJson(res, 400, { error: 'webhook_not_configured' });
+      }
+      if (!verifyStripeSignature(raw, req.headers['stripe-signature'], STRIPE_WEBHOOK_SECRET)) {
+        console.error('[stripe] webhook signature verification failed');
+        return sendJson(res, 400, { error: 'bad_signature' });
+      }
+      let evt;
+      try { evt = JSON.parse(raw.toString('utf8')); } catch { return sendJson(res, 400, { error: 'bad_json' }); }
+      try {
+        const s = (evt.data && evt.data.object) || {};
+        const orderId = Number(s.metadata && s.metadata.order_id);
+        if (evt.type === 'checkout.session.completed' && orderId) {
+          markOrderPaid(orderId, s.id);
+          console.log(`[stripe] order ${orderId} marked paid (session ${s.id})`);
+        } else if (evt.type === 'checkout.session.expired' && orderId) {
+          db.prepare("UPDATE orders SET status='payment_expired' WHERE id=? AND status='pending_payment'").run(orderId);
+          console.log(`[stripe] order ${orderId} payment session expired`);
+        }
+      } catch (e) { console.error('[stripe] webhook handler error:', e); }
+      return sendJson(res, 200, { received: true });
+    }
+    if (p === '/api/orders/status' && req.method === 'GET') {
+      const orderId = Number(url.searchParams.get('order_id'));
+      const sessionId = url.searchParams.get('session_id') || '';
+      const order = db.prepare('SELECT * FROM orders WHERE id=?').get(orderId);
+      if (!order) return sendJson(res, 404, { error: 'order_not_found' });
+      // Reconcile with Stripe when the webhook may not have landed yet.
+      // Only the order's own stored session_id is accepted for this.
+      if (order.status === 'pending_payment' && STRIPE_ENABLED && sessionId && order.stripe_session_id && sessionId === order.stripe_session_id) {
+        try {
+          const s = await stripeApi('GET', `/checkout/sessions/${encodeURIComponent(sessionId)}`);
+          if (s.payment_status === 'paid') {
+            markOrderPaid(order.id, sessionId);
+            order.status = 'paid';
+          }
+        } catch (e) { console.error(`[stripe] session retrieve failed for order ${order.id}: ${e.message}`); }
+      }
+      return sendJson(res, 200, { order_id: order.id, status: order.status, paid: order.status === 'paid', total_cents: order.total_cents });
     }
     if (p === '/api/messages' && req.method === 'POST') {
       const body = await readBody(req);
@@ -487,7 +639,14 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, { ok: true });
       }
       if (p === '/api/seller/orders' && req.method === 'GET') {
-        const orders = db.prepare('SELECT o.*, l.title FROM orders o JOIN lots l ON l.id=o.lot_id ORDER BY o.created_at DESC LIMIT 200').all();
+        const orders = db.prepare('SELECT o.*, l.title FROM orders o JOIN lots l ON l.id=o.lot_id ORDER BY o.created_at DESC LIMIT 200').all()
+          .map((o) => ({
+            ...o,
+            payment_status: o.status === 'paid' ? 'paid'
+              : o.status === 'pending_payment' ? 'pending_payment'
+              : o.status === 'payment_expired' ? 'payment_expired'
+              : 'recorded', // record-only order (no Stripe payment taken): unpaid (recorded)
+          }));
         return sendJson(res, 200, { orders });
       }
       if (p === '/api/seller/unread' && req.method === 'GET') {
@@ -555,4 +714,5 @@ server.listen(PORT, () => {
   lifecycleSweep();
   console.log(`Kanstar Daily Auction listening on http://localhost:${PORT}`);
   console.log(`SQLite database: ${DB_PATH}`);
+  console.log(STRIPE_ENABLED ? `Stripe Checkout: ENABLED (site ${SITE_URL})` : 'Stripe Checkout: disabled (no STRIPE_SECRET_KEY) — checkout is record-only');
 });

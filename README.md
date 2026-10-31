@@ -18,10 +18,18 @@ Single-seller auction site for Kanstar (kanstarus.com). Zero npm dependencies
   otherwise the SQLite database resets on every restart/redeploy.
 - Optional env: `TAX_RATE_CA` (default 0.095).
 
-## Not yet wired (by design)
-- Card payments: checkout currently records orders only. Stripe Checkout
-  hooks into `POST /api/checkout` in server.js; keys go in env vars at
-  deploy time, never in this repo.
+## Card payments (Stripe Checkout — wired, env-gated)
+- With no Stripe env vars set, checkout records orders only (as before).
+- Set these env vars on the host to take card payments (keys from the
+  owner's Stripe account, never in this repo): `STRIPE_SECRET_KEY`,
+  `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, and `SITE_URL`
+  (default `https://kanstarus.com`). Checkout then creates a Stripe
+  Checkout Session and redirects the winner to Stripe; orders move
+  `pending_payment` → `paid` via webhook/reconciliation.
+- Register the webhook in Stripe (Developers → Webhooks):
+  URL `https://kanstarus.com/api/stripe/webhook`, events
+  `checkout.session.completed` and `checkout.session.expired`; put the
+  signing secret in `STRIPE_WEBHOOK_SECRET`.
 - Email notifications are recorded as "sent" log rows only; wire a mail
   provider (Resend/SES) inside `logNotification()` when ready.
 
