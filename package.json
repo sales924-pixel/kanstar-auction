@@ -1,0 +1,1 @@
+{"description":"Kanstar Daily Auction — single-seller warehouse auction site (standalone, zero-dependency Node.js).","engines":{"node":">=22"},"main":"server.js","name":"kanstar-auction","private":true,"scripts":{"start":"node server.js"},"version":"1.0.0"}
