@@ -16,6 +16,7 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'auction.db');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads'); // seller-uploaded photos live on the data disk so redeploys never lose them
 const TAX_RATE_CA = Number(process.env.TAX_RATE_CA || 0.095); // CA sales tax on item price only
 const WAREHOUSE = '1065 S Vail Ave, Montebello, CA 90640';
 const FREE_SHIP_THRESHOLD_CENTS = 2000; // shipping free at/above $20 winning bid
@@ -69,7 +70,7 @@ function verifyPasscode(pw) {
 
 /* ------------------------------ database ----------------------------- */
 fs.mkdirSync(DATA_DIR, { recursive: true });
-fs.mkdirSync(path.join(PUBLIC_DIR, 'uploads'), { recursive: true });
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 const db = new DatabaseSync(DB_PATH);
 db.exec(`
 CREATE TABLE IF NOT EXISTS lots(
@@ -453,7 +454,7 @@ const server = http.createServer(async (req, res) => {
             if (!m) continue;
             const ext = m[1] === 'png' ? 'png' : 'jpg';
             const fname = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${ext}`;
-            fs.writeFileSync(path.join(PUBLIC_DIR, 'uploads', fname), Buffer.from(m[2], 'base64'));
+            fs.writeFileSync(path.join(UPLOADS_DIR, fname), Buffer.from(m[2], 'base64'));
             imagePaths.push(`/uploads/${fname}`);
           }
         }
@@ -527,6 +528,14 @@ const server = http.createServer(async (req, res) => {
     if (p.startsWith('/api/')) return sendJson(res, 404, { error: 'not_found' });
 
     /* ---------------------------- static ----------------------------- */
+    if (p.startsWith('/uploads/')) { // seller uploads are served from the data disk
+      const up = path.normalize(path.join(UPLOADS_DIR, p.slice('/uploads/'.length)));
+      if (!up.startsWith(UPLOADS_DIR) || !fs.existsSync(up) || fs.statSync(up).isDirectory()) { res.writeHead(404); return res.end('not found'); }
+      const uext = path.extname(up).toLowerCase();
+      const umime = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' }[uext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': umime, 'Cache-Control': 'public, max-age=86400' });
+      return fs.createReadStream(up).pipe(res);
+    }
     let filePath = path.normalize(path.join(PUBLIC_DIR, p === '/' ? 'index.html' : p));
     if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end('forbidden'); }
     if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
