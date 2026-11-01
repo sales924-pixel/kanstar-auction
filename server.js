@@ -412,8 +412,10 @@ const server = http.createServer(async (req, res) => {
       if (!validEmail(email)) return sendJson(res, 400, { error: 'invalid_email' });
       const amount = Math.round(Number(body.amount) * 100);
       const top = topBid(lot.id, lot.round);
-      const minNext = top ? top.amount_cents + 100 : lot.start_cents;
+      const minNext = top ? top.amount_cents + 50 : lot.start_cents;
       if (!Number.isFinite(amount) || amount < minNext) return sendJson(res, 400, { error: 'bid_too_low', min_cents: minNext });
+      const stepBase = top ? top.amount_cents : lot.start_cents;
+      if ((amount - stepBase) % 50 !== 0) return sendJson(res, 400, { error: 'bid_step' });
       let bidder = getBidderByEmail(email);
       if (!bidder) {
         db.prepare('INSERT INTO bidders(name,email,created_at) VALUES(?,?,?)').run(name, email, now());
