@@ -447,9 +447,10 @@ const server = http.createServer(async (req, res) => {
       if (!validEmail(email)) return sendJson(res, 400, { error: 'invalid_email' });
       const bidder = getBidderByEmail(email);
       if (!bidder) return sendJson(res, 200, { bids: [], wins: [] });
-      const bids = db.prepare(`SELECT b.amount_cents, b.created_at, l.id AS lot_id, l.title, l.status, l.ends_at, l.zone, l.round AS lot_round, b.round AS bid_round,
+      const bids = db.prepare(`SELECT b.amount_cents, b.created_at, l.id AS lot_id, l.title, l.images, l.status, l.ends_at, l.zone, l.round AS lot_round, b.round AS bid_round,
           (SELECT MAX(amount_cents) FROM bids WHERE lot_id=l.id AND round=b.round) AS top_cents
-        FROM bids b JOIN lots l ON l.id=b.lot_id WHERE b.bidder_id=? ORDER BY b.created_at DESC`).all(bidder.id);
+        FROM bids b JOIN lots l ON l.id=b.lot_id WHERE b.bidder_id=? ORDER BY b.created_at DESC`).all(bidder.id)
+        .map((b) => ({ ...b, cover: (JSON.parse(b.images || '[]')[0] || null), images: undefined }));
       const wins = db.prepare(`SELECT w.id AS win_id, w.amount_cents, w.lot_id, l.title, l.images, w.order_id
         FROM wins w JOIN lots l ON l.id=w.lot_id WHERE w.bidder_id=? ORDER BY w.created_at DESC`).all(bidder.id)
         .map((w) => ({ ...w, images: JSON.parse(w.images || '[]') }));
