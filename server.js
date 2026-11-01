@@ -605,6 +605,48 @@ const server = http.createServer(async (req, res) => {
         for (const e of emails) logNotification('daily_new', e.email, r.lastInsertRowid, `New lot listed: "${title}".`);
         return sendJson(res, 200, { ok: true, lot_id: r.lastInsertRowid });
       }
+      if (p === '/api/seller/lots' && req.method === 'GET') {
+        // Full lot list for the seller Manage tab (includes ended/removed).
+        const lots = db.prepare('SELECT * FROM lots ORDER BY (status=\'active\') DESC, ends_at ASC').all().map(publicLot);
+        return sendJson(res, 200, { lots });
+      }
+      if (p.startsWith('/api/seller/lots/') && req.method === 'PATCH') {
+        // Edit a live lot in place: prices and copy. Only 'active' lots can be
+        // edited (an unsold 'ended' lot reopens within one sweep; a sold one is
+        // history). The starting price locks once the current round has bids,
+        // so a live auction's terms never change under its bidders.
+        const id = Number(p.split('/')[4]);
+        const lot = db.prepare('SELECT * FROM lots WHERE id=?').get(id);
+        if (!lot) return sendJson(res, 404, { error: 'not_found' });
+        if (lot.status === 'removed') return sendJson(res, 400, { error: 'lot_removed' });
+        if (lot.status !== 'active') return sendJson(res, 400, { error: 'lot_not_active' });
+        const body = await readBody(req);
+        const sets = [], vals = [];
+        if (body.title !== undefined) {
+          const title = String(body.title || '').trim();
+          if (title.length < 3) return sendJson(res, 400, { error: 'title_required' });
+          sets.push('title=?'); vals.push(title);
+        }
+        for (const [field, col] of [['subtitle', 'subtitle'], ['category', 'category'], ['qty_note', 'qty_note'], ['description', 'description']]) {
+          if (body[field] !== undefined) { sets.push(`${col}=?`); vals.push(String(body[field])); }
+        }
+        if (body.start !== undefined) {
+          const cents = Math.max(100, Math.round(Number(body.start) * 100) || 0);
+          if (!cents) return sendJson(res, 400, { error: 'bad_start' });
+          if (cents !== lot.start_cents && bidCount(lot.id, lot.round) > 0) {
+            return sendJson(res, 400, { error: 'has_bids_price_locked' });
+          }
+          sets.push('start_cents=?'); vals.push(cents);
+        }
+        if (body.retail !== undefined) {
+          sets.push('retail_cents=?');
+          vals.push(body.retail === null || body.retail === '' ? null : Math.max(0, Math.round(Number(body.retail) * 100) || 0));
+        }
+        if (!sets.length) return sendJson(res, 400, { error: 'nothing_to_update' });
+        vals.push(id);
+        db.prepare(`UPDATE lots SET ${sets.join(', ')} WHERE id=?`).run(...vals);
+        return sendJson(res, 200, { ok: true, lot: publicLot(db.prepare('SELECT * FROM lots WHERE id=?').get(id)) });
+      }
       if (p.startsWith('/api/seller/lots/') && req.method === 'DELETE') {
         // Unlist a lot: it vanishes from the public site and stops cycling
         // (lifecycleSweep only touches 'active' lots). Bids/wins/orders rows
