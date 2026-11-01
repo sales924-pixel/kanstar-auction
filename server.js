@@ -203,6 +203,13 @@ function finalizeLot(lot) {
     // close the round and automatically open a fresh 5-minute round
     db.prepare("UPDATE lots SET round=round+1, created_at=?, ends_at=?, status='active' WHERE id=?")
       .run(now(), now() + lot.duration_ms, lot.id);
+  } else if (!top) {
+    // main zone, no bids — unsold: automatically relist in place with a fresh
+    // round (same lot, round+1, new full duration). Keeps cycling until the
+    // lot sells or the seller removes it; no duplicate lots ever appear.
+    db.prepare("UPDATE lots SET round=round+1, created_at=?, ends_at=?, status='active' WHERE id=?")
+      .run(now(), now() + lot.duration_ms, lot.id);
+    endingSoonSent.delete(lot.id);
   } else {
     db.prepare("UPDATE lots SET status='ended' WHERE id=?").run(lot.id);
   }
@@ -220,6 +227,18 @@ function lifecycleSweep() {
         endingSoonSent.add(lot.id);
         logNotification('ending_soon', top.bidder_email, lot.id, `"${lot.title}" ends soon — you are the highest bidder.`);
       }
+    }
+  }
+  // Auto-relist backstop: a main-zone lot sitting in 'ended' with no win
+  // recorded for its round ended unsold (e.g. it closed before auto-relist
+  // existed) — open a fresh round in place. Sold lots have a win row and are
+  // never touched; removed lots are excluded by the status filter.
+  const stale = db.prepare("SELECT * FROM lots WHERE status='ended' AND zone='main'").all();
+  for (const lot of stale) {
+    const win = db.prepare('SELECT id FROM wins WHERE lot_id=? AND round=?').get(lot.id, lot.round);
+    if (!win) {
+      db.prepare("UPDATE lots SET round=round+1, created_at=?, ends_at=?, status='active' WHERE id=?")
+        .run(t, t + lot.duration_ms, lot.id);
     }
   }
 }
