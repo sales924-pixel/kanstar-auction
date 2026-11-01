@@ -19,7 +19,7 @@ const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'auction.db');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads'); // seller-uploaded photos live on the data disk so redeploys never lose them
 const TAX_RATE_CA = Number(process.env.TAX_RATE_CA || 0.095); // CA sales tax on item price only
 const WAREHOUSE = '1065 S Vail Ave, Montebello, CA 90640';
-const FREE_SHIP_THRESHOLD_CENTS = 2000; // shipping free at/above $20 winning bid
+const FREE_SHIP_THRESHOLD_CENTS = 3000; // shipping free at/above $30 winning bid
 const SHIP_FEE_CENTS = 500;             // otherwise +$5
 
 /* Stripe Checkout (env-gated): with no STRIPE_SECRET_KEY set, checkout is
