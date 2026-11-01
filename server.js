@@ -39,43 +39,6 @@ function verifyPasscode(pw) {
   return crypto.timingSafeEqual(h, Buffer.from(SELLER_HASH, 'hex'));
 }
 
-/* ------------- first-boot asset extraction (deploy bundle) -------------
- * The deploy repo ships the public/ tree as assets-bundle.zip (keeps the
- * repo to a handful of files). On first boot, if public/index.html is
- * missing, extract the bundle into public/ using only built-in zlib. */
-(function extractAssets() {
-  const zipPath = path.join(ROOT, 'assets-bundle.zip');
-  if (fs.existsSync(path.join(PUBLIC_DIR, 'index.html')) || !fs.existsSync(zipPath)) return;
-  const zlib = require('node:zlib');
-  const buf = fs.readFileSync(zipPath);
-  let eocd = -1;
-  for (let i = buf.length - 22; i >= 0; i--) { if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; } }
-  if (eocd < 0) throw new Error('assets-bundle.zip: end-of-central-directory not found');
-  const count = buf.readUInt16LE(eocd + 10);
-  let off = buf.readUInt32LE(eocd + 16);
-  for (let n = 0; n < count; n++) {
-    if (buf.readUInt32LE(off) !== 0x02014b50) throw new Error('assets-bundle.zip: bad central directory');
-    const method = buf.readUInt16LE(off + 10);
-    const compSize = buf.readUInt32LE(off + 20);
-    const nameLen = buf.readUInt16LE(off + 28);
-    const extraLen = buf.readUInt16LE(off + 30);
-    const commentLen = buf.readUInt16LE(off + 32);
-    const localOff = buf.readUInt32LE(off + 42);
-    const name = buf.toString('utf8', off + 46, off + 46 + nameLen);
-    off += 46 + nameLen + extraLen + commentLen;
-    if (name.endsWith('/')) continue;
-    const lNameLen = buf.readUInt16LE(localOff + 26);
-    const lExtraLen = buf.readUInt16LE(localOff + 28);
-    const dataStart = localOff + 30 + lNameLen + lExtraLen;
-    const comp = buf.subarray(dataStart, dataStart + compSize);
-    const data = method === 8 ? zlib.inflateRawSync(comp) : comp;
-    const dest = path.join(PUBLIC_DIR, name);
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, data);
-  }
-  console.log(`Extracted assets-bundle.zip (${count} entries) into public/`);
-})();
-
 /* ------------------------------ database ----------------------------- */
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -712,8 +675,8 @@ const server = http.createServer(async (req, res) => {
       filePath = path.join(PUBLIC_DIR, 'index.html'); // SPA fallback
     }
     const ext = path.extname(filePath).toLowerCase();
-    const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' }[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=86400' });
+    const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.json': 'application/json; charset=utf-8' }[ext] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': (ext === '.html' || p === '/sw.js') ? 'no-cache' : 'public, max-age=86400' });
     fs.createReadStream(filePath).pipe(res);
   } catch (err) {
     console.error(err);
