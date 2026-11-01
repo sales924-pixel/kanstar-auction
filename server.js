@@ -692,32 +692,35 @@ const server = http.createServer(async (req, res) => {
       }
       if (p === '/api/seller/traffic' && req.method === 'GET') {
         const t = now();
+        const range = ['today', '3d', '7d', '30d'].includes(url.searchParams.get('range')) ? url.searchParams.get('range') : 'today';
         const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
-        const ds = dayStart.getTime();
+        const daysBack = { today: 0, '3d': 2, '7d': 6, '30d': 29 }[range];
+        const rs = dayStart.getTime() - daysBack * 86400000;
         const one = (sql, ...a) => db.prepare(sql).get(...a).c;
+        // Unique counting (user rule, 2026-11-01): the same visitor counts once
+        // per page/lot viewed in the range, no matter how many times they clicked.
         const stats = {
-          today_visitors: one('SELECT COUNT(DISTINCT visitor_id) AS c FROM events WHERE created_at>=?', ds),
-          total_visitors: one('SELECT COUNT(DISTINCT visitor_id) AS c FROM events'),
-          page_views: one("SELECT COUNT(*) AS c FROM events WHERE type='page'"),
-          lot_views: one("SELECT COUNT(*) AS c FROM events WHERE type='lot'"),
-          bids: one('SELECT COUNT(*) AS c FROM bids'),
+          visitors: one('SELECT COUNT(DISTINCT visitor_id) AS c FROM events WHERE created_at>=?', rs),
+          page_views: one("SELECT COUNT(DISTINCT visitor_id) AS c FROM events WHERE type='page' AND created_at>=?", rs),
+          lot_views: one("SELECT COUNT(DISTINCT visitor_id || ':' || lot_id) AS c FROM events WHERE type='lot' AND created_at>=?", rs),
+          bids: one('SELECT COUNT(*) AS c FROM bids WHERE created_at>=?', rs),
         };
-        const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, views: 0, visitors: 0 }));
-        for (const e of db.prepare('SELECT visitor_id, created_at FROM events WHERE created_at>=?').all(ds)) {
-          const h = new Date(e.created_at).getHours();
-          hourly[h].views++;
+        const hourVisitors = Array.from({ length: 24 }, () => new Set());
+        const hourSlots = Array.from({ length: 24 }, () => new Set());
+        for (const e of db.prepare('SELECT visitor_id, created_at FROM events WHERE created_at>=?').all(rs)) {
+          const d = new Date(e.created_at);
+          const h = d.getHours();
+          hourVisitors[h].add(e.visitor_id);
+          hourSlots[h].add(e.visitor_id + '|' + d.toDateString());
         }
-        for (let h = 0; h < 24; h++) {
-          hourly[h].visitors = one('SELECT COUNT(DISTINCT visitor_id) AS c FROM events WHERE created_at>=? AND created_at<?',
-            ds + h * 3600000, ds + (h + 1) * 3600000);
-        }
+        const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, views: hourSlots[h].size, visitors: hourVisitors[h].size }));
         const byLot = db.prepare(`SELECT l.id, l.title, l.images, l.status, l.zone,
-            (SELECT COUNT(*) FROM events e WHERE e.type='lot' AND e.lot_id=l.id) AS views,
-            (SELECT COUNT(*) FROM bids b WHERE b.lot_id=l.id) AS bids
-          FROM lots l ORDER BY views DESC, bids DESC LIMIT 30`).all()
+            (SELECT COUNT(DISTINCT e.visitor_id) FROM events e WHERE e.type='lot' AND e.lot_id=l.id AND e.created_at>=?) AS views,
+            (SELECT COUNT(*) FROM bids b WHERE b.lot_id=l.id AND b.created_at>=?) AS bids
+          FROM lots l ORDER BY views DESC, bids DESC LIMIT 30`).all(rs, rs)
           .map((r) => ({ ...r, cover: (JSON.parse(r.images || '[]')[0] || null), images: undefined }));
-        const byState = db.prepare('SELECT state, COUNT(DISTINCT visitor_id) AS visitors, COUNT(*) AS views FROM events GROUP BY state ORDER BY visitors DESC').all();
-        return sendJson(res, 200, { stats, hourly, by_lot: byLot, by_state: byState, generated_at: t });
+        const byState = db.prepare('SELECT state, COUNT(DISTINCT visitor_id) AS visitors FROM events WHERE created_at>=? GROUP BY state ORDER BY visitors DESC').all(rs);
+        return sendJson(res, 200, { range, stats, hourly, by_lot: byLot, by_state: byState, generated_at: t });
       }
       return sendJson(res, 404, { error: 'not_found' });
     }
