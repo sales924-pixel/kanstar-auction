@@ -31,8 +31,8 @@ const SITE_URL = (process.env.SITE_URL || 'https://kanstarus.com').replace(/\/+$
 const STRIPE_ENABLED = !!STRIPE_SECRET_KEY;
 
 /* Seller passcode: only a scrypt hash lives here (plaintext never stored). */
-const SELLER_SALT = '0d3b93e87f0e184c783d780c4164442a';
-const SELLER_HASH = 'da9b9a6959639c6996549dfc75783906dcc3b359345342f4e4e8fc3c7c14aaa608c651fd97d813b8e3aee1d8ae8abf451aa7c2147b86f68d518c60535a36fa0a';
+const SELLER_SALT = 'f784542145dd6fa23460047f30c63cab';
+const SELLER_HASH = '00be1340b6c3386ae9dff2fb1f5087ceb965e591396529d6ee9110ecc505b12f405b1126a9b6eafe9321385dff8d3f322eba5e4998c986f437185dc58bbc2620';
 function verifyPasscode(pw) {
   if (typeof pw !== 'string' || !pw) return false;
   const h = crypto.scryptSync(pw, Buffer.from(SELLER_SALT, 'hex'), 64);
@@ -737,7 +737,7 @@ const server = http.createServer(async (req, res) => {
     }
     const ext = path.extname(filePath).toLowerCase();
     const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.json': 'application/json; charset=utf-8' }[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': (ext === '.html' || p === '/sw.js') ? 'no-cache' : 'public, max-age=86400' });
+    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': (ext === '.html' || ext === '.css' || ext === '.js' || p === '/sw.js') ? 'no-cache' : 'public, max-age=86400' });
     fs.createReadStream(filePath).pipe(res);
   } catch (err) {
     console.error(err);
