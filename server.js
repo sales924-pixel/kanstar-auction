@@ -167,6 +167,48 @@ seedIfEmpty();
 /* ------------------------------ helpers ------------------------------ */
 const now = () => Date.now();
 const money = (c) => Math.round(c);
+
+/* ----- Los Angeles time (seller stats report in the user's timezone) ----- */
+const laFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+});
+function laParts(t) {
+  const p = {};
+  for (const part of laFmt.formatToParts(new Date(t))) {
+    if (part.type !== 'literal') p[part.type] = Number(part.value);
+  }
+  p.hour %= 24; // some ICU versions still emit 24 at midnight despite h23
+  return p;
+}
+// LA wall-clock offset from UTC (ms) in effect at instant t.
+function laOffsetMs(t) {
+  const p = laParts(t);
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(t / 1000) * 1000;
+}
+// Epoch ms of 00:00:00 LA time on LA calendar date (y, m, d). Re-checking the
+// offset at the candidate instant handles DST transition days (e.g. the
+// fall-back day, whose midnight is still on the pre-transition offset).
+function laMidnightMs(y, m, d) {
+  const wall = Date.UTC(y, m - 1, d);
+  let t = wall;
+  for (let i = 0; i < 3; i++) {
+    const next = wall - laOffsetMs(t);
+    if (next === t) break;
+    t = next;
+  }
+  return t;
+}
+// Start (epoch ms) of the LA calendar day `daysBack` days before the LA day
+// containing t. Date arithmetic is done on the LA calendar date itself, so
+// DST days (23/25 hours) never shift the boundary.
+function laRangeStartMs(daysBack, t) {
+  const p = laParts(t);
+  const norm = new Date(Date.UTC(p.year, p.month - 1, p.day - daysBack));
+  return laMidnightMs(norm.getUTCFullYear(), norm.getUTCMonth() + 1, norm.getUTCDate());
+}
+const laHour = (t) => laParts(t).hour;
+const laDayKey = (t) => { const p = laParts(t); return p.year + '-' + p.month + '-' + p.day; };
 function logNotification(kind, toEmail, lotId, body) {
   if (!toEmail) return;
   db.prepare('INSERT INTO notifications(kind,to_email,lot_id,body,created_at,sent) VALUES(?,?,?,?,?,1)')
@@ -719,9 +761,8 @@ const server = http.createServer(async (req, res) => {
       if (p === '/api/seller/traffic' && req.method === 'GET') {
         const t = now();
         const range = ['today', '3d', '7d', '30d'].includes(url.searchParams.get('range')) ? url.searchParams.get('range') : 'today';
-        const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
         const daysBack = { today: 0, '3d': 2, '7d': 6, '30d': 29 }[range];
-        const rs = dayStart.getTime() - daysBack * 86400000;
+        const rs = laRangeStartMs(daysBack, t); // range boundary at LA midnight
         const one = (sql, ...a) => db.prepare(sql).get(...a).c;
         // Unique counting (user rule, 2026-11-01): the same visitor counts once
         // per page/lot viewed in the range, no matter how many times they clicked.
@@ -734,10 +775,9 @@ const server = http.createServer(async (req, res) => {
         const hourVisitors = Array.from({ length: 24 }, () => new Set());
         const hourSlots = Array.from({ length: 24 }, () => new Set());
         for (const e of db.prepare('SELECT visitor_id, created_at FROM events WHERE created_at>=?').all(rs)) {
-          const d = new Date(e.created_at);
-          const h = d.getHours();
+          const h = laHour(e.created_at);
           hourVisitors[h].add(e.visitor_id);
-          hourSlots[h].add(e.visitor_id + '|' + d.toDateString());
+          hourSlots[h].add(e.visitor_id + '|' + laDayKey(e.created_at));
         }
         const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: h, views: hourSlots[h].size, visitors: hourVisitors[h].size }));
         const byLot = db.prepare(`SELECT l.id, l.title, l.images, l.status, l.zone,
@@ -751,9 +791,8 @@ const server = http.createServer(async (req, res) => {
       if (p === '/api/seller/bidstats' && req.method === 'GET') {
         const t = now();
         const range = ['today', '3d', '7d', '30d'].includes(url.searchParams.get('range')) ? url.searchParams.get('range') : 'today';
-        const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
         const daysBack = { today: 0, '3d': 2, '7d': 6, '30d': 29 }[range];
-        const rs = dayStart.getTime() - daysBack * 86400000;
+        const rs = laRangeStartMs(daysBack, t); // range boundary at LA midnight
         const one = (sql, ...a) => db.prepare(sql).get(...a).c;
         const stats = {
           total_bids: one('SELECT COUNT(*) AS c FROM bids WHERE created_at>=?', rs),
@@ -772,7 +811,7 @@ const server = http.createServer(async (req, res) => {
         };
         const hourCounts = Array.from({ length: 24 }, () => 0);
         for (const b of db.prepare('SELECT created_at FROM bids WHERE created_at>=?').all(rs)) {
-          hourCounts[new Date(b.created_at).getHours()]++;
+          hourCounts[laHour(b.created_at)]++;
         }
         const hourly = hourCounts.map((bids, hour) => ({ hour, bids }));
         const byLot = db.prepare(`SELECT l.id, l.title, l.images, l.status, l.round,
