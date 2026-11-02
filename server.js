@@ -748,6 +748,46 @@ const server = http.createServer(async (req, res) => {
         const byState = db.prepare('SELECT state, COUNT(DISTINCT visitor_id) AS visitors FROM events WHERE created_at>=? GROUP BY state ORDER BY visitors DESC').all(rs);
         return sendJson(res, 200, { range, stats, hourly, by_lot: byLot, by_state: byState, generated_at: t });
       }
+      if (p === '/api/seller/bidstats' && req.method === 'GET') {
+        const t = now();
+        const range = ['today', '3d', '7d', '30d'].includes(url.searchParams.get('range')) ? url.searchParams.get('range') : 'today';
+        const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+        const daysBack = { today: 0, '3d': 2, '7d': 6, '30d': 29 }[range];
+        const rs = dayStart.getTime() - daysBack * 86400000;
+        const one = (sql, ...a) => db.prepare(sql).get(...a).c;
+        const stats = {
+          total_bids: one('SELECT COUNT(*) AS c FROM bids WHERE created_at>=?', rs),
+          unique_bidders: one('SELECT COUNT(DISTINCT bidder_id) AS c FROM bids WHERE created_at>=?', rs),
+          lots_with_bids: one('SELECT COUNT(DISTINCT lot_id) AS c FROM bids WHERE created_at>=?', rs),
+          highest_bid_cents: one('SELECT COALESCE(MAX(amount_cents),0) AS c FROM bids WHERE created_at>=?', rs),
+          wins_in_range: one('SELECT COUNT(*) AS c FROM wins WHERE created_at>=?', rs),
+          won_value_cents: one('SELECT COALESCE(SUM(amount_cents),0) AS c FROM wins WHERE created_at>=?', rs),
+          // Live snapshot (not range-bound): for each active lot, its current-round
+          // high bid; lots without bids contribute nothing.
+          live_bid_total_cents: one(`SELECT COALESCE(SUM(hi),0) AS c FROM (
+            SELECT (SELECT MAX(b.amount_cents) FROM bids b WHERE b.lot_id=l.id AND b.round=l.round) AS hi
+            FROM lots l WHERE l.status='active') WHERE hi IS NOT NULL`),
+          live_lots_with_bids: one(`SELECT COUNT(*) AS c FROM lots l WHERE l.status='active'
+            AND EXISTS (SELECT 1 FROM bids b WHERE b.lot_id=l.id AND b.round=l.round)`),
+        };
+        const hourCounts = Array.from({ length: 24 }, () => 0);
+        for (const b of db.prepare('SELECT created_at FROM bids WHERE created_at>=?').all(rs)) {
+          hourCounts[new Date(b.created_at).getHours()]++;
+        }
+        const hourly = hourCounts.map((bids, hour) => ({ hour, bids }));
+        const byLot = db.prepare(`SELECT l.id, l.title, l.images, l.status, l.round,
+            (SELECT COUNT(*) FROM bids b WHERE b.lot_id=l.id AND b.created_at>=?) AS bids,
+            (SELECT COUNT(DISTINCT b.bidder_id) FROM bids b WHERE b.lot_id=l.id AND b.created_at>=?) AS unique_bidders,
+            (SELECT MAX(b.amount_cents) FROM bids b WHERE b.lot_id=l.id AND b.created_at>=?) AS high_cents,
+            (SELECT MAX(b.created_at) FROM bids b WHERE b.lot_id=l.id AND b.created_at>=?) AS last_bid_at
+          FROM lots l WHERE EXISTS (SELECT 1 FROM bids b WHERE b.lot_id=l.id AND b.created_at>=?)
+          ORDER BY bids DESC LIMIT 20`).all(rs, rs, rs, rs, rs)
+          .map((r) => ({ ...r, cover: (JSON.parse(r.images || '[]')[0] || null), images: undefined }));
+        const recent = db.prepare(`SELECT l.title AS lot_title, bd.name AS bidder_name, b.amount_cents, b.created_at, b.round
+          FROM bids b JOIN lots l ON l.id=b.lot_id JOIN bidders bd ON bd.id=b.bidder_id
+          WHERE b.created_at>=? ORDER BY b.created_at DESC LIMIT 25`).all(rs);
+        return sendJson(res, 200, { range, stats, hourly, by_lot: byLot, recent, generated_at: t });
+      }
       return sendJson(res, 404, { error: 'not_found' });
     }
     if (p.startsWith('/api/')) return sendJson(res, 404, { error: 'not_found' });
