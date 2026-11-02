@@ -21,6 +21,9 @@ const TAX_RATE_CA = Number(process.env.TAX_RATE_CA || 0.095); // CA sales tax on
 const WAREHOUSE = '1065 S Vail Ave, Montebello, CA 90640';
 const FREE_SHIP_THRESHOLD_CENTS = 3000; // shipping free at/above $30 winning bid
 const SHIP_FEE_CENTS = 500;             // otherwise +$5
+const PROMO_CODE = 'KANSTAR5';          // package-insert card code: $5 off first win
+const PROMO_DISCOUNT_CENTS = 500;
+const PROMO_MIN_ITEM_CENTS = 1000;      // applies to winning bids of $10 or more
 
 /* Stripe Checkout (env-gated): with no STRIPE_SECRET_KEY set, checkout is
  * record-only exactly as before. Keys come from the host's env, never the repo. */
@@ -113,6 +116,25 @@ function ensureColumn(table, col, ddl) {
 }
 ensureColumn('orders', 'stripe_session_id', "TEXT DEFAULT ''");
 ensureColumn('orders', 'paid_at', 'INTEGER');
+ensureColumn('orders', 'promo_code', "TEXT DEFAULT ''");
+ensureColumn('orders', 'discount_cents', 'INTEGER DEFAULT 0');
+
+/* Promo code: $5 off a first win of $10+, one use per email. A use counts
+ * once an order exists with the code, unless that order's payment expired
+ * or it was cancelled. */
+function promoEval(email, itemCents) {
+  if (itemCents < PROMO_MIN_ITEM_CENTS) return { discount: 0, state: 'below_min' };
+  const used = db.prepare("SELECT COUNT(*) AS c FROM orders WHERE promo_code=? AND lower(buyer_email)=lower(?) AND status NOT IN ('payment_expired','cancelled')").get(PROMO_CODE, String(email || '')).c;
+  if (used > 0) return { discount: 0, state: 'used' };
+  return { discount: PROMO_DISCOUNT_CENTS, state: 'applied' };
+}
+function promoFromBody(body, email, itemCents) {
+  const raw = String((body && body.code) || '').trim().toUpperCase();
+  if (!raw) return { code: '', discount: 0, state: null };
+  if (raw !== PROMO_CODE) return { code: raw, discount: 0, state: 'invalid' };
+  const r = promoEval(email, itemCents);
+  return { code: PROMO_CODE, discount: r.discount, state: r.state };
+}
 
 /* ------------------------------ seed lots ---------------------------- */
 const img = (lot, n) => Array.from({ length: n }, (_, i) => `/images/lot-${String(lot).padStart(2, '0')}/${String(i + 1).padStart(2, '0')}.jpg`);
@@ -463,7 +485,8 @@ const server = http.createServer(async (req, res) => {
       const state = String(body.state || '').toUpperCase();
       const shipping = method === 'pickup' ? 0 : (item >= FREE_SHIP_THRESHOLD_CENTS ? 0 : SHIP_FEE_CENTS);
       const tax = (method === 'pickup' || state === 'CA') ? money(item * TAX_RATE_CA) : 0;
-      return sendJson(res, 200, { item_cents: item, shipping_cents: shipping, tax_cents: tax, total_cents: item + shipping + tax, tax_rate: TAX_RATE_CA });
+      const promo = promoFromBody(body, body.email, item);
+      return sendJson(res, 200, { item_cents: item, shipping_cents: shipping, tax_cents: tax, discount_cents: promo.discount, promo_state: promo.state, total_cents: item + shipping + tax - promo.discount, tax_rate: TAX_RATE_CA });
     }
     if (p === '/api/checkout' && req.method === 'POST') {
       const body = await readBody(req);
@@ -481,14 +504,16 @@ const server = http.createServer(async (req, res) => {
       const item = win.amount_cents;
       const shipping = method === 'pickup' ? 0 : (item >= FREE_SHIP_THRESHOLD_CENTS ? 0 : SHIP_FEE_CENTS);
       const tax = (method === 'pickup' || state === 'CA') ? money(item * TAX_RATE_CA) : 0;
-      const total = item + shipping + tax;
-      const r = db.prepare(`INSERT INTO orders(win_id,lot_id,buyer_name,buyer_email,phone,method,dest_state,address,item_cents,shipping_cents,tax_cents,total_cents,created_at,status)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(win.id, win.lot_id, bidder.name, bidder.email, String(body.phone).trim(), method,
+      const promo = promoFromBody(body, bidder.email, item);
+      const discount = promo.discount;
+      const total = item + shipping + tax - discount;
+      const r = db.prepare(`INSERT INTO orders(win_id,lot_id,buyer_name,buyer_email,phone,method,dest_state,address,item_cents,shipping_cents,tax_cents,total_cents,created_at,status,promo_code,discount_cents)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(win.id, win.lot_id, bidder.name, bidder.email, String(body.phone).trim(), method,
         method === 'pickup' ? 'CA' : state, String(body.address || '').trim(), item, shipping, tax, total, now(),
-        STRIPE_ENABLED ? 'pending_payment' : 'awaiting_contact');
+        STRIPE_ENABLED ? 'pending_payment' : 'awaiting_contact', discount > 0 ? PROMO_CODE : '', discount);
       const orderId = Number(r.lastInsertRowid);
       db.prepare('UPDATE wins SET order_id=? WHERE id=?').run(orderId, win.id);
-      const base = { ok: true, order_id: orderId, item_cents: item, shipping_cents: shipping, tax_cents: tax, total_cents: total };
+      const base = { ok: true, order_id: orderId, item_cents: item, shipping_cents: shipping, tax_cents: tax, discount_cents: discount, promo_state: promo.state, total_cents: total };
       if (!STRIPE_ENABLED) return sendJson(res, 200, base); // record-only mode (no keys configured)
       try {
         const session = await stripeApi('POST', '/checkout/sessions', {
