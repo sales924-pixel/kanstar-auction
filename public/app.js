@@ -952,7 +952,7 @@ async function sellerTab(tab) {
           <span class="note"><span style="color:var(--accent)">${l.bids} ${t('t_bids')}</span> · ${l.unique_bidders} ${t('b_bidders')} · ${t('b_high')} ${fmt(l.high_cents)}</span></div>
           <div class="track"><div class="fillb" style="width:${(l.bids / maxLot) * 100}%"></div></div>
           <div class="note">${t('b_last')}: ${new Date(l.last_bid_at).toLocaleString()}</div></div>
-          ${l.status === 'active' ? `<button class="btn small secondary bs-cancel" style="flex:none;color:#ff8b6b;border-color:#ff8b6b" data-id="${l.id}">${t('cancel_lot')}</button>` : l.status === 'cancelled' ? `<span class="chip" style="flex:none;color:#ff8b6b;border-color:#ff8b6b;font-weight:700">${t('cancelled_tag')}</span>` : ''}
+          ${l.status === 'active' ? `<button class="btn small secondary bs-cancel" style="flex:none;color:#ff8b6b;border-color:#ff8b6b" data-id="${l.id}">${t('cancel_lot')}</button>` : `${l.status === 'cancelled' ? `<span class="chip" style="flex:none;color:#ff8b6b;border-color:#ff8b6b;font-weight:700">${t('cancelled_tag')}</span>` : ''}<button class="btn small bs-relist" style="flex:none" data-id="${l.id}">↻ ${t('relist_lot')}</button>`}
           </div>`).join('') || `<p class="note">—</p>`}
       </div>
       <div class="panel" style="margin-top:16px"><h3 style="margin-top:0">${t('b_recent')}</h3>
@@ -960,7 +960,7 @@ async function sellerTab(tab) {
           <div class="grow"><div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(r.lot_title)}</span>
           <span style="color:var(--accent);font-weight:700">${fmt(r.amount_cents)}</span></div>
           <div class="note">${esc(r.bidder_name)} · ${t('b_round')} ${r.round} · ${new Date(r.created_at).toLocaleString()}</div></div>
-          ${r.lot_status === 'active' ? `<button class="btn small secondary bs-cancel" style="flex:none;color:#ff8b6b;border-color:#ff8b6b" data-id="${r.lot_id}">${t('cancel_lot')}</button>` : r.lot_status === 'cancelled' ? `<span class="chip" style="flex:none;color:#ff8b6b;border-color:#ff8b6b;font-weight:700">${t('cancelled_tag')}</span>` : ''}
+          ${r.lot_status === 'active' ? `<button class="btn small secondary bs-cancel" style="flex:none;color:#ff8b6b;border-color:#ff8b6b" data-id="${r.lot_id}">${t('cancel_lot')}</button>` : `${r.lot_status === 'cancelled' ? `<span class="chip" style="flex:none;color:#ff8b6b;border-color:#ff8b6b;font-weight:700">${t('cancelled_tag')}</span>` : ''}<button class="btn small bs-relist" style="flex:none" data-id="${r.lot_id}">↻ ${t('relist_lot')}</button>`}
           </div>`).join('') || `<p class="note">—</p>`}
       </div>`}`;
     $$('.range-btn', body).forEach((b) => b.addEventListener('click', () => {
@@ -973,6 +973,15 @@ async function sellerTab(tab) {
       try {
         await api('/api/seller/lots/' + b.dataset.id + '/cancel', { method: 'POST', headers: sellerHeaders() });
         toast(t('cancelled_ok'));
+        sellerTab('bidstats');
+      } catch (err) { b.disabled = false; toast((err.data && err.data.error) || 'Error'); }
+    }));
+    $$('.bs-relist', body).forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm(t('relist_confirm'))) return;
+      b.disabled = true;
+      try {
+        await api('/api/seller/lots/' + b.dataset.id + '/relist', { method: 'POST', headers: sellerHeaders() });
+        toast(t('relisted_ok'));
         sellerTab('bidstats');
       } catch (err) { b.disabled = false; toast((err.data && err.data.error) || 'Error'); }
     }));
