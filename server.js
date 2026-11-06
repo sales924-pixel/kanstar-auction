@@ -446,14 +446,14 @@ const server = http.createServer(async (req, res) => {
     /* ------------------------------ API ------------------------------ */
     if (p === '/api/lots' && req.method === 'GET') {
       lifecycleSweep();
-      const lots = db.prepare("SELECT * FROM lots WHERE status != 'removed' ORDER BY zone DESC, ends_at ASC").all().map(publicLot);
+      const lots = db.prepare("SELECT * FROM lots WHERE status IN ('active','ended') ORDER BY zone DESC, ends_at ASC").all().map(publicLot);
       return sendJson(res, 200, { now: now(), lots });
     }
     if (p.startsWith('/api/lots/') && req.method === 'GET') {
       lifecycleSweep();
       const id = Number(p.split('/')[3]);
       const lot = db.prepare('SELECT * FROM lots WHERE id=?').get(id);
-      if (!lot || lot.status === 'removed') return sendJson(res, 404, { error: 'not_found' });
+      if (!lot || lot.status === 'removed' || lot.status === 'cancelled') return sendJson(res, 404, { error: 'not_found' });
       return sendJson(res, 200, { now: now(), lot: publicLot(lot) });
     }
     if (p === '/api/track' && req.method === 'POST') {
@@ -726,6 +726,36 @@ const server = http.createServer(async (req, res) => {
         if (!lot) return sendJson(res, 404, { error: 'not_found' });
         if (lot.status !== 'removed') db.prepare("UPDATE lots SET status='removed' WHERE id=?").run(id);
         return sendJson(res, 200, { ok: true, lot_id: id, status: 'removed' });
+      }
+      if (p.startsWith('/api/seller/lots/') && p.endsWith('/cancel') && req.method === 'POST') {
+        // Cancel a live auction (seller misclick / change of mind): the round
+        // is voided — no winner is ever declared for it — and the lot leaves
+        // the public site. It can be brought back any time with /relist.
+        const id = Number(p.split('/')[4]);
+        const lot = db.prepare('SELECT * FROM lots WHERE id=?').get(id);
+        if (!lot) return sendJson(res, 404, { error: 'not_found' });
+        if (lot.status !== 'active') return sendJson(res, 400, { error: 'lot_not_active' });
+        const win = db.prepare('SELECT id FROM wins WHERE lot_id=? AND round=?').get(id, lot.round);
+        if (win) return sendJson(res, 400, { error: 'already_won' });
+        const top = topBid(lot.id, lot.round);
+        db.prepare("UPDATE lots SET status='cancelled' WHERE id=?").run(id);
+        if (top) logNotification('auction_cancelled', top.bidder_email, lot.id, `The auction for "${lot.title}" was cancelled by the seller. Your bid has been voided.`);
+        return sendJson(res, 200, { ok: true, lot_id: id, status: 'cancelled' });
+      }
+      if (p.startsWith('/api/seller/lots/') && p.endsWith('/relist') && req.method === 'POST') {
+        // One-click relist: reopen any finished lot (ended, removed or
+        // cancelled) in place — same lot, round+1, same prices and photos,
+        // fresh full duration. For a sold lot this sells another unit; the
+        // old win and its order stay untouched.
+        const id = Number(p.split('/')[4]);
+        const lot = db.prepare('SELECT * FROM lots WHERE id=?').get(id);
+        if (!lot) return sendJson(res, 404, { error: 'not_found' });
+        if (lot.status === 'active') return sendJson(res, 400, { error: 'already_active' });
+        const t = now();
+        db.prepare("UPDATE lots SET round=round+1, created_at=?, ends_at=?, status='active' WHERE id=?")
+          .run(t, t + lot.duration_ms, id);
+        endingSoonSent.delete(id);
+        return sendJson(res, 200, { ok: true, lot: publicLot(db.prepare('SELECT * FROM lots WHERE id=?').get(id)) });
       }
       if (p === '/api/seller/inbox' && req.method === 'GET') {
         const msgs = db.prepare('SELECT * FROM messages ORDER BY created_at DESC LIMIT 200').all();
