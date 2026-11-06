@@ -55,6 +55,10 @@ const I18N = {
     orders_empty: 'No orders yet.',
     remove_lot: 'Remove', removed_tag: 'REMOVED', removed_ok: 'Lot removed.',
     remove_confirm: 'Remove this lot from the site? It disappears for visitors and stops cycling. Existing wins and orders are kept.',
+    cancel_lot: 'Cancel auction', cancel_confirm: 'Cancel this auction now? The round ends immediately and all bids in it are voided.',
+    cancelled_tag: 'CANCELLED', cancelled_ok: 'Auction cancelled.',
+    relist_lot: 'Relist', relist_confirm: 'Relist this lot? A new round starts right away at the same starting price.',
+    relisted_ok: 'Relisted — new round is live.',
     t_today: 'Visitors today', t_total: 'Total visitors', t_pages: 'Page views', t_lots: 'Lot views', t_bids: 'Bids',
     t_visitors: 'Visitors', t_unique_note: 'Unique counts — repeat visits from the same visitor count once.',
     r_today: 'Today', r_3d: '3 days', r_7d: '7 days', r_30d: '30 days', cat_all: 'All',
@@ -121,6 +125,10 @@ const I18N = {
     orders_empty: 'Aún no hay pedidos.',
     remove_lot: 'Quitar', removed_tag: 'ELIMINADO', removed_ok: 'Lote eliminado.',
     remove_confirm: '¿Quitar este lote del sitio? Desaparece para los visitantes y deja de ciclar. Los premios y pedidos existentes se conservan.',
+    cancel_lot: 'Cancelar subasta', cancel_confirm: '¿Cancelar esta subasta ahora? La ronda termina de inmediato y todas las pujas quedan anuladas.',
+    cancelled_tag: 'CANCELADO', cancelled_ok: 'Subasta cancelada.',
+    relist_lot: 'Republicar', relist_confirm: '¿Republicar este lote? Una nueva ronda empieza ahora con el mismo precio inicial.',
+    relisted_ok: 'Republicado: la nueva ronda está activa.',
     t_today: 'Visitantes hoy', t_total: 'Visitantes totales', t_pages: 'Vistas de página', t_lots: 'Vistas de lotes', t_bids: 'Pujas',
     t_visitors: 'Visitantes', t_unique_note: 'Conteo único — las visitas repetidas del mismo visitante cuentan una sola vez.',
     r_today: 'Hoy', r_3d: '3 días', r_7d: '7 días', r_30d: '30 días', cat_all: 'Todo',
@@ -525,7 +533,7 @@ async function pageMyBids() {
         <h2>${t('your_bids')}</h2>
         <table><tr><th>Lot</th><th>${t('bid_amount')}</th><th>${t('current_bid')}</th><th></th></tr>
         ${data.bids.map((b) => `<tr><td><span class="mb-lot">${b.cover ? `<img class="thumb" src="${esc(b.cover)}" alt="">` : ''}<a href="#/lot/${b.lot_id}">${esc(b.title)}</a></span></td><td>${fmt(b.amount_cents)}</td><td>${fmt(b.top_cents)}</td>
-          <td>${b.status === 'ended' ? '' : (myTop(b) ? `<span class="success">${t('winning')}</span>` : `<span style="color:#ff8b6b">${t('outbid')}</span>`)}</td></tr>`).join('')}
+          <td>${b.status === 'cancelled' ? `<span style="color:#ff8b6b">${t('cancelled_tag')}</span>` : b.status === 'ended' ? '' : (myTop(b) ? `<span class="success">${t('winning')}</span>` : `<span style="color:#ff8b6b">${t('outbid')}</span>`)}</td></tr>`).join('')}
         </table>`;
     } catch (err) { $('#mb-err').textContent = err.data.error || 'Error'; }
   });
@@ -779,12 +787,14 @@ async function sellerTab(tab) {
   }
   if (tab === 'manage') {
     const data = await api('/api/seller/lots', { headers: sellerHeaders() });
-    const lots = (data.lots || []).filter((l) => l.status !== 'removed');
+    const lots = data.lots || [];
     body.innerHTML = lots.length ? lots.map((l) => {
       const cover = l.images && l.images[0];
       const chip = l.status === 'removed'
         ? `<span class="chip" style="color:#ff8b6b;border-color:#ff8b6b;font-weight:700">${t('removed_tag')}</span>`
-        : l.status === 'ended'
+        : l.status === 'cancelled'
+          ? `<span class="chip" style="color:#ff8b6b;border-color:#ff8b6b;font-weight:700">${t('cancelled_tag')}</span>`
+          : l.status === 'ended'
           ? `<span class="chip" style="font-weight:700">${t('ended_tag')}</span>`
           : `<span class="chip" style="color:var(--ok);border-color:var(--ok);font-weight:700">${t('active_tag')}</span>`;
       return `<div class="panel" style="margin-bottom:12px">
@@ -796,7 +806,8 @@ async function sellerTab(tab) {
           </div>
           ${chip}
           ${l.status === 'active' ? `<button class="btn small secondary edit-lot" style="flex:none" data-id="${l.id}">${t('edit_lot')}</button>
-          <button class="btn small secondary remove-lot2" style="flex:none" data-id="${l.id}">${t('remove_lot')}</button>` : ''}
+          <button class="btn small secondary cancel-lot" style="flex:none;color:#ff8b6b;border-color:#ff8b6b" data-id="${l.id}">${t('cancel_lot')}</button>`
+            : `<button class="btn small relist-lot" style="flex:none" data-id="${l.id}">↻ ${t('relist_lot')}</button>`}
         </div>
         <form class="edit-form" data-id="${l.id}" style="display:none;max-width:560px;margin-top:12px">
           <label>${t('f_title')}</label><input class="e-title" value="${esc(l.title)}" required>
@@ -842,12 +853,21 @@ async function sellerTab(tab) {
         err.textContent = t('err_' + code) !== 'err_' + code ? t('err_' + code) : (code || 'Error');
       }
     }));
-    $$('.remove-lot2', body).forEach((b) => b.addEventListener('click', async () => {
-      if (!confirm(t('remove_confirm'))) return;
+    $$('.cancel-lot', body).forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm(t('cancel_confirm'))) return;
       b.disabled = true;
       try {
-        await api('/api/seller/lots/' + b.dataset.id, { method: 'DELETE', headers: sellerHeaders() });
-        toast(t('removed_ok'));
+        await api('/api/seller/lots/' + b.dataset.id + '/cancel', { method: 'POST', headers: sellerHeaders() });
+        toast(t('cancelled_ok'));
+        sellerTab('manage');
+      } catch (err) { b.disabled = false; toast((err.data && err.data.error) || 'Error'); }
+    }));
+    $$('.relist-lot', body).forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm(t('relist_confirm'))) return;
+      b.disabled = true;
+      try {
+        await api('/api/seller/lots/' + b.dataset.id + '/relist', { method: 'POST', headers: sellerHeaders() });
+        toast(t('relisted_ok'));
         sellerTab('manage');
       } catch (err) { b.disabled = false; toast((err.data && err.data.error) || 'Error'); }
     }));
