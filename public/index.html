@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kanstar Daily Auction</title>
+<meta name="theme-color" content="#171210">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kanstar">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/styles.css?v=17">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔨</text></svg>">
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="#/">
+    <span class="brand-mark">KANSTAR</span>
+    <span class="brand-sub" data-i18n="brand_sub">DAILY AUCTION</span>
+  </a>
+  <nav class="main-nav">
+    <a href="#/" data-nav="home" data-i18n="nav_all">All Lots</a>
+    <a href="#/my-bids" data-nav="mybids" data-i18n="nav_my">My Bids</a>
+    <a href="#/rules" data-nav="rules" data-i18n="nav_rules">Rules</a>
+    <a href="#/my-messages" data-nav="mymsg" data-i18n="nav_msg">My Messages</a>
+  </nav>
+  <div class="lang-toggle" role="group" aria-label="Language">
+    <button id="lang-en" type="button">EN</button>
+    <button id="lang-es" type="button">ES</button>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<footer class="site-footer">
+  <div class="footer-cols">
+    <div>
+      <strong>Kanstar Daily Auction</strong>
+      <p data-i18n="footer_about">Kanstar's own warehouse auction. New lots every day — every lot starts with its own 24-hour countdown.</p>
+    </div>
+    <div>
+      <strong data-i18n="footer_pickup_h">Warehouse pickup</strong>
+      <p>1065 S Vail Ave, Montebello, CA 90640<br><span data-i18n="footer_pickup">Free pickup on any winning bid. Shipping: free on wins of $30+, otherwise +$5. Local delivery next day; nationwide 3–7 days.</span></p>
+    </div>
+    <div>
+      <strong data-i18n="footer_help_h">Questions?</strong>
+      <p><a href="#/contact" data-i18n="footer_contact">Contact us</a><br>
+      <a href="#/rules" data-i18n="nav_rules">Rules</a></p>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© Kanstar</span>
+    <a href="#/seller" class="seller-link" data-i18n="seller_login">Seller login</a>
+  </div>
+</footer>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/app.js?v=17"></script>
+</body>
+</html>
