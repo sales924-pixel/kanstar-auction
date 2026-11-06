@@ -61,7 +61,7 @@ const I18N = {
     relisted_ok: 'Relisted — new round is live.',
     t_today: 'Visitors today', t_total: 'Total visitors', t_pages: 'Page views', t_lots: 'Lot views', t_bids: 'Bids',
     t_visitors: 'Visitors', t_unique_note: 'Unique counts — repeat visits from the same visitor count once.',
-    r_today: 'Today', r_3d: '3 days', r_7d: '7 days', r_30d: '30 days', cat_all: 'All',
+    r_today: 'Today', r_yday: 'Yesterday', r_3d: '3 days', r_7d: '7 days', r_30d: '30 days', cat_all: 'All',
     t_hours: 'Traffic by hour', t_by_lot: 'Views & bids by lot', t_by_state: 'Visitors by state',
     b_total: 'Total bids', b_bidders: 'Bidders', b_lots_bids: 'Lots with bids', b_highest: 'Highest bid',
     b_live_total: 'Live bid total', b_live_lots: 'Live lots with bids', b_wins: 'Lots won', b_won_value: 'Won value',
@@ -131,7 +131,7 @@ const I18N = {
     relisted_ok: 'Republicado: la nueva ronda está activa.',
     t_today: 'Visitantes hoy', t_total: 'Visitantes totales', t_pages: 'Vistas de página', t_lots: 'Vistas de lotes', t_bids: 'Pujas',
     t_visitors: 'Visitantes', t_unique_note: 'Conteo único — las visitas repetidas del mismo visitante cuentan una sola vez.',
-    r_today: 'Hoy', r_3d: '3 días', r_7d: '7 días', r_30d: '30 días', cat_all: 'Todo',
+    r_today: 'Hoy', r_yday: 'Ayer', r_3d: '3 días', r_7d: '7 días', r_30d: '30 días', cat_all: 'Todo',
     t_hours: 'Tráfico por hora', t_by_lot: 'Vistas y ofertas por lote', t_by_state: 'Visitantes por estado',
     b_total: 'Pujas totales', b_bidders: 'Pujadores', b_lots_bids: 'Lotes con pujas', b_highest: 'Puja más alta',
     b_live_total: 'Total en vivo', b_live_lots: 'Lotes en vivo con pujas', b_wins: 'Lotes ganados', b_won_value: 'Valor ganado',
@@ -879,7 +879,7 @@ async function sellerTab(tab) {
     const maxLot = Math.max(1, ...d.by_lot.map((l) => l.views));
     const maxState = Math.max(1, ...d.by_state.map((x) => x.visitors));
     body.innerHTML = `
-      <div class="range-row">${[['today', 'r_today'], ['3d', 'r_3d'], ['7d', 'r_7d'], ['30d', 'r_30d']].map(([k, lk]) => `<button class="btn small ${trafficRange === k ? '' : 'secondary'} range-btn" data-range="${k}">${t(lk)}</button>`).join('')}</div>
+      <div class="range-row">${[['today', 'r_today'], ['yesterday', 'r_yday'], ['3d', 'r_3d'], ['7d', 'r_7d'], ['30d', 'r_30d']].map(([k, lk]) => `<button class="btn small ${trafficRange === k ? '' : 'secondary'} range-btn" data-range="${k}">${t(lk)}</button>`).join('')}</div>
       <div class="stat-grid">
         <div class="stat"><div class="num">${s.visitors}</div><div class="lbl">${t('t_visitors')}</div></div>
         <div class="stat"><div class="num">${s.page_views}</div><div class="lbl">${t('t_pages')}</div></div>
@@ -927,7 +927,7 @@ async function sellerTab(tab) {
     const maxH = Math.max(1, ...d.hourly.map((h) => h.bids));
     const maxLot = Math.max(1, ...d.by_lot.map((l) => l.bids));
     body.innerHTML = `
-      <div class="range-row">${[['today', 'r_today'], ['3d', 'r_3d'], ['7d', 'r_7d'], ['30d', 'r_30d']].map(([k, lk]) => `<button class="btn small ${bidRange === k ? '' : 'secondary'} range-btn" data-range="${k}">${t(lk)}</button>`).join('')}</div>
+      <div class="range-row">${[['today', 'r_today'], ['yesterday', 'r_yday'], ['3d', 'r_3d'], ['7d', 'r_7d'], ['30d', 'r_30d']].map(([k, lk]) => `<button class="btn small ${bidRange === k ? '' : 'secondary'} range-btn" data-range="${k}">${t(lk)}</button>`).join('')}</div>
       <div class="stat-grid">
         <div class="stat"><div class="num">${s.total_bids}</div><div class="lbl">${t('b_total')}</div></div>
         <div class="stat"><div class="num">${s.unique_bidders}</div><div class="lbl">${t('b_bidders')}</div></div>
