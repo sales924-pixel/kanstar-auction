@@ -852,7 +852,7 @@ const server = http.createServer(async (req, res) => {
           FROM lots l WHERE EXISTS (SELECT 1 FROM bids b WHERE b.lot_id=l.id AND b.created_at>=?)
           ORDER BY bids DESC LIMIT 20`).all(rs, rs, rs, rs, rs)
           .map((r) => ({ ...r, cover: (JSON.parse(r.images || '[]')[0] || null), images: undefined }));
-        const recent = db.prepare(`SELECT l.title AS lot_title, bd.name AS bidder_name, b.amount_cents, b.created_at, b.round
+        const recent = db.prepare(`SELECT b.lot_id, l.status AS lot_status, l.title AS lot_title, bd.name AS bidder_name, b.amount_cents, b.created_at, b.round
           FROM bids b JOIN lots l ON l.id=b.lot_id JOIN bidders bd ON bd.id=b.bidder_id
           WHERE b.created_at>=? ORDER BY b.created_at DESC LIMIT 25`).all(rs);
         return sendJson(res, 200, { range, stats, hourly, by_lot: byLot, recent, generated_at: t });
