@@ -42,6 +42,11 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 .flash-zone{background:#2a0d06;border:2px solid var(--accent2);border-radius:var(--radius);padding:16px 18px;margin-top:30px}
 .flash-zone .zone-title{color:#ffb59d;margin-top:0}
 .flash-badge{background:var(--accent);color:#fff;font-weight:800;padding:3px 10px;border-radius:20px;font-size:.75rem;letter-spacing:.08em}
+.overseas-zone{background:#0b1e2a;border:2px solid #1f6f8b;border-radius:var(--radius);padding:16px 18px;margin-top:30px}
+.overseas-zone .zone-title{color:#9fd8e8;margin-top:0}
+.overseas-badge{background:#1f6f8b;color:#fff;font-weight:800;padding:3px 10px;border-radius:20px;font-size:.75rem;letter-spacing:.08em}
+.overseas-banner{background:#123243;border:1px solid #1f6f8b;color:#cfeef7;border-radius:10px;padding:10px 12px;font-weight:600;margin:0 0 14px}
+.overseas-note{background:#123243;border:1px solid #1f6f8b;color:#cfeef7;border-radius:10px;padding:10px 12px;font-weight:600;margin:10px 0}
 
 /* lot cards */
 .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
@@ -68,6 +73,7 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 .qb-form .error{margin:0}
 .chip{background:#171210;border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:2px 9px;font-size:.72rem}
 .chip.ship{background:#3a1503;color:var(--gold);border-color:#6b2d08;font-weight:700}
+.chip.overseas{background:#123243;color:#9fd8e8;border-color:#1f6f8b;font-weight:700}
 /* countdown bar */
 .countbar{height:14px;background:#171210;border-top:1px solid var(--line);position:relative;overflow:hidden}
 .countbar .fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--accent));width:100%;position:relative;overflow:hidden;box-shadow:0 0 9px rgba(255,176,58,.65),inset 0 0 6px rgba(255,255,255,.25)}

@@ -11,6 +11,7 @@ const I18N = {
     hero_h: 'Warehouse deals, auctioned daily', hero_p: 'Every lot is sold by Kanstar only. Each lot has its own 24-hour countdown — when it hits zero, the highest bid wins.',
     live_now: 'live auctions now', err_bid_step: 'Bids go up in $0.50 steps only — please use an amount on the $0.50 ladder.',
     main_zone: 'Main Zone — 24-Hour Auctions', flash_zone: '5-Minute Flash Zone', flash_empty: 'No flash auctions right now. The seller will light this zone up soon.',
+    overseas_zone: 'Overseas Zone — 7-Day Auctions', overseas_banner: '🌏 Overseas Zone — Ships from overseas · Arrives in 30–40 days · Consolidated shipping to our Montebello warehouse', overseas_badge: '⏳ 30–40 days delivery', overseas_empty: 'No overseas auctions right now — new items are on the way.',
     current_bid: 'Current bid', starting_bid: 'Starting bid', bids: 'bids', bid: 'bid', retail: 'Retail',
     free_ship: 'FREE SHIP $30+', free_pickup: 'FREE PICKUP', time_left: 'left', ended: 'ENDED', ends_in: 'Ends in',
     view_lot: 'View & bid', photos: 'photos',
@@ -48,7 +49,7 @@ const I18N = {
     m_start: 'Start', m_current: 'Now', m_bids: 'bids', m_round: 'Round', active_tag: 'ACTIVE', ended_tag: 'ENDED',
     err_has_bids_price_locked: 'This lot already has bids, so the starting price is locked. Other fields can still be edited.',
     err_lot_not_active: 'This lot is not live right now, so it cannot be edited.', err_lot_removed: 'This lot was removed.',
-    f_title: 'Title', f_sub: 'Subtitle', f_cat: 'Category', f_zone: 'Zone', f_main: 'Main (24 hours)', f_flash: 'Flash (5 minutes)',
+    f_title: 'Title', f_sub: 'Subtitle', f_cat: 'Category', f_zone: 'Zone', f_main: 'Main (24 hours)', f_flash: 'Flash (5 minutes)', f_overseas: 'Overseas (7 days)',
     f_start: 'Starting price (USD)', f_retail: 'Retail price (USD, optional)', f_qty: 'Quantity note', f_desc: 'Description',
     f_photos: 'Photos (up to 8, first = cover)', list_it: 'List it', listed_ok: 'Lot listed! It is live now.',
     inbox_empty: 'No messages yet.', reply: 'Reply', reply_send: 'Send reply', mark_read: 'Mark all read',
@@ -81,6 +82,7 @@ const I18N = {
     hero_h: 'Ofertas de almacén, subastadas cada día', hero_p: 'Todos los lotes los vende solo Kanstar. Cada lote tiene su propia cuenta regresiva de 24 horas: cuando llega a cero, gana la oferta más alta.',
     live_now: 'subastas en curso ahora', err_bid_step: 'Las pujas suben solo en pasos de $0.50 — usa un monto en esa escala.',
     main_zone: 'Zona principal — Subastas de 24 horas', flash_zone: 'Zona Flash de 5 minutos', flash_empty: 'No hay subastas flash ahora. El vendedor activará esta zona pronto.',
+    overseas_zone: 'Zona Internacional — Subastas de 7 días', overseas_banner: '🌏 Zona Internacional — Envío desde el extranjero · Llega en 30–40 días · Envío consolidado a nuestro almacén de Montebello', overseas_badge: '⏳ Entrega en 30–40 días', overseas_empty: 'No hay subastas internacionales ahora — nuevos artículos en camino.',
     current_bid: 'Oferta actual', starting_bid: 'Oferta inicial', bids: 'ofertas', bid: 'oferta', retail: 'Precio de lista',
     free_ship: 'ENVÍO GRATIS $30+', free_pickup: 'RECOGIDA GRATIS', time_left: 'restante', ended: 'TERMINADO', ends_in: 'Termina en',
     view_lot: 'Ver y ofertar', photos: 'fotos',
@@ -118,7 +120,7 @@ const I18N = {
     m_start: 'Inicio', m_current: 'Ahora', m_bids: 'pujas', m_round: 'Ronda', active_tag: 'ACTIVO', ended_tag: 'TERMINADO',
     err_has_bids_price_locked: 'Este lote ya tiene pujas, así que el precio inicial está bloqueado. Los demás campos sí se pueden editar.',
     err_lot_not_active: 'Este lote no está activo ahora, así que no se puede editar.', err_lot_removed: 'Este lote fue eliminado.',
-    f_title: 'Título', f_sub: 'Subtítulo', f_cat: 'Categoría', f_zone: 'Zona', f_main: 'Principal (24 horas)', f_flash: 'Flash (5 minutos)',
+    f_title: 'Título', f_sub: 'Subtítulo', f_cat: 'Categoría', f_zone: 'Zona', f_main: 'Principal (24 horas)', f_flash: 'Flash (5 minutos)', f_overseas: 'Internacional (7 días)',
     f_start: 'Precio inicial (USD)', f_retail: 'Precio de lista (USD, opcional)', f_qty: 'Nota de cantidad', f_desc: 'Descripción',
     f_photos: 'Fotos (hasta 8, la primera es la portada)', list_it: 'Publicar', listed_ok: '¡Lote publicado! Ya está en vivo.',
     inbox_empty: 'Aún no hay mensajes.', reply: 'Respuesta', reply_send: 'Enviar respuesta', mark_read: 'Marcar todo leído',
@@ -283,6 +285,7 @@ function fmtLeft(ms) {
   const s = Math.floor(ms / 1000);
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
   const p2 = (n) => String(n).padStart(2, '0');
+  if (h >= 48) return `${Math.floor(h / 24)}d ${p2(h % 24)}h ${p2(m)}m`;
   return h > 0 ? `${h}h ${p2(m)}m ${p2(ss)}s` : `${m}m ${p2(ss)}s`;
 }
 setInterval(() => {
@@ -319,7 +322,7 @@ function lotCard(lot) {
     <div class="body">
       <h3><a href="#/lot/${lot.id}">${esc(lot.title)}</a></h3>
       <div class="sub">${esc(lot.subtitle)}</div>
-      <div class="badges"><span class="chip ship">${t('free_ship')}</span><span class="chip ship">${t('free_pickup')}</span>${lot.qty_note ? `<span class="chip">${esc(lot.qty_note)}</span>` : ''}</div>
+      <div class="badges"><span class="chip ship">${t('free_ship')}</span><span class="chip ship">${t('free_pickup')}</span>${lot.zone === 'overseas' ? `<span class="chip overseas">${t('overseas_badge')}</span>` : ''}${lot.qty_note ? `<span class="chip">${esc(lot.qty_note)}</span>` : ''}</div>
       <div class="price-row"><span class="price">${fmt(lot.current_cents)}</span>${lot.retail_cents ? `<span class="retail">${fmt(lot.retail_cents)}</span>` : ''}</div>
       <div class="meta"><span>${lot.has_bids ? t('current_bid') : t('starting_bid')} · ${lot.bid_count} ${lot.bid_count === 1 ? t('bid') : t('bids')}</span>
       <span class="${ended ? 'ended-tag' : ''}" data-ends="${lot.ends_at}">${ended ? t('ended') : fmtLeft(lot.ends_at - nowMs())}</span></div>
@@ -338,6 +341,7 @@ async function pageHome() {
   const data = await api('/api/lots');
   serverOffset = data.now - Date.now();
   const mainAll = data.lots.filter((l) => l.zone === 'main' && l.status === 'active');
+  const overseas = data.lots.filter((l) => l.zone === 'overseas' && l.status === 'active');
   const flash = data.lots.filter((l) => l.zone === 'flash' && l.status === 'active');
   const catCounts = {};
   for (const l of mainAll) { const c = l.category || 'Other'; catCounts[c] = (catCounts[c] || 0) + 1; }
@@ -345,11 +349,16 @@ async function pageHome() {
   if (homeCat !== 'all' && !catCounts[homeCat]) homeCat = 'all';
   const main = homeCat === 'all' ? mainAll : mainAll.filter((l) => (l.category || 'Other') === homeCat);
   app.innerHTML = `
-    <div class="hero"><h1>${t('hero_h')}</h1><p>${t('hero_p')}</p><p class="hero-stat"><span class="live-dot"></span><strong>${mainAll.length + flash.length}</strong>&nbsp;${t('live_now')}</p></div>
+    <div class="hero"><h1>${t('hero_h')}</h1><p>${t('hero_p')}</p><p class="hero-stat"><span class="live-dot"></span><strong>${mainAll.length + overseas.length + flash.length}</strong>&nbsp;${t('live_now')}</p></div>
     <div class="cat-row"><button class="btn small ${homeCat === 'all' ? '' : 'secondary'} cat-btn" data-cat="all">${t('cat_all')} (${mainAll.length})</button>${cats.map((c) => `<button class="btn small ${homeCat === c ? '' : 'secondary'} cat-btn" data-cat="${esc(c)}">${esc(c)} (${catCounts[c]})</button>`).join('')}</div>
     <h2 class="zone-title"><span class="dot"></span>${t('main_zone')}</h2>
     <p class="note" style="margin-top:-8px">${t('per_lot_time')}</p>
     <div class="grid">${main.map(lotCard).join('')}</div>
+    <section class="overseas-zone">
+      <h2 class="zone-title"><span class="overseas-badge">OVERSEAS</span>${t('overseas_zone')}</h2>
+      <p class="overseas-banner">${t('overseas_banner')}</p>
+      ${overseas.length ? `<div class="grid">${overseas.map(lotCard).join('')}</div>` : `<p class="note">${t('overseas_empty')}</p>`}
+    </section>
     <section class="flash-zone">
       <h2 class="zone-title"><span class="flash-badge">FLASH</span>${t('flash_zone')}</h2>
       ${flash.length ? `<div class="grid">${flash.map(lotCard).join('')}</div>` : `<p class="note">${t('flash_empty')}</p>`}
@@ -409,6 +418,7 @@ async function pageLot(id) {
         <div class="panel">
           <h1>${esc(lot.title)}</h1>
           <p class="sub">${esc(lot.subtitle)}</p>
+          ${lot.zone === 'overseas' ? `<p class="overseas-note">${t('overseas_banner')}</p>` : ''}
           <div class="kv"><span>${lot.has_bids ? t('current_bid') : t('starting_bid')}</span><strong style="font-size:1.3rem">${fmt(lot.current_cents)}</strong></div>
           ${lot.retail_cents ? `<div class="kv"><span>${t('retail')}</span><span style="text-decoration:line-through;color:var(--muted)">${fmt(lot.retail_cents)}</span></div>` : ''}
           <div class="kv"><span>${t('bids')}</span><span>${lot.bid_count}</span></div>
@@ -732,7 +742,7 @@ async function sellerTab(tab) {
       <div><label>${t('f_qty')}</label><input id="l-qty"></div></div>
       <div class="two-col"><div><label>${t('f_start')}</label><input id="l-start" type="number" step="0.01" min="1" required></div>
       <div><label>${t('f_retail')}</label><input id="l-retail" type="number" step="0.01" min="0"></div></div>
-      <label>${t('f_zone')}</label><select id="l-zone"><option value="main">${t('f_main')}</option><option value="flash">${t('f_flash')}</option></select>
+      <label>${t('f_zone')}</label><select id="l-zone"><option value="main">${t('f_main')}</option><option value="flash">${t('f_flash')}</option><option value="overseas">${t('f_overseas')}</option></select>
       <label>${t('f_desc')}</label><textarea id="l-desc" rows="3"></textarea>
       <label>${t('f_photos')}</label><input id="l-photos" type="file" accept="image/*" multiple>
       <p class="error" id="l-err"></p><p class="success" id="l-ok"></p>
