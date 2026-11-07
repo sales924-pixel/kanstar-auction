@@ -69,7 +69,7 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 @media(max-width:1280px){.grid{grid-template-columns:repeat(5,1fr)}}
 @media(max-width:1020px){.grid{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:760px){.grid{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:560px){.grid{grid-template-columns:repeat(2,1fr);gap:10px}.card .body{padding:9px 10px 11px;gap:5px}.card h3{font-size:.85rem}.card .sub{font-size:.72rem}.card .price{font-size:1.05rem}.card .retail{font-size:.72rem}.card .meta{font-size:.7rem}.qb-form{margin-top:7px;gap:6px}.qb-form .bid-row{gap:6px}.qb-form .bid-row .btn{padding-left:10px;padding-right:10px}}
+@media(max-width:560px){.grid{grid-template-columns:repeat(2,1fr);gap:10px}.card .body{padding:9px 10px 11px;gap:5px}.card h3{font-size:.85rem}.card .sub{font-size:.72rem}.card .price{font-size:1.05rem}.card .retail{font-size:.72rem}.card .meta{font-size:.7rem}.qb-form{margin-top:7px;gap:6px}.qb-form .bid-row{gap:6px}.qb-form .bid-row .btn{padding-left:8px;padding-right:8px;font-size:.85rem}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
 .card .photo{background:#fff;aspect-ratio:1/1;position:relative;overflow:hidden;display:block}
 .card .photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
@@ -87,6 +87,11 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 .qb-form .bid-row input{flex:1;min-width:0}
 .qb-form .bid-row .btn{flex:0 0 auto;width:auto}
 .qb-form .error{margin:0}
+.qb-form .bid-row input{padding-left:8px;padding-right:8px}
+.qb-form .q-amount{-moz-appearance:textfield;appearance:textfield}
+.qb-form .q-amount::-webkit-outer-spin-button,.qb-form .q-amount::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+@media(max-width:560px){.qb-form .bid-row{gap:5px}.qb-form .bid-row input{padding-left:4px;padding-right:4px;min-width:52px}}
+@media(max-width:400px){.qb-form .bid-row .btn{font-size:.8rem;padding-left:5px;padding-right:5px}.qb-form .q-amount{font-size:15px}.qb-form .bid-row input{padding-left:2px;padding-right:2px}}
 .chip{background:#171210;border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:2px 9px;font-size:.72rem}
 .chip.ship{background:#3a1503;color:var(--gold);border-color:#6b2d08;font-weight:700}
 .chip.overseas{background:#123243;color:#9fd8e8;border-color:#1f6f8b;font-weight:700}
@@ -144,6 +149,17 @@ th{color:var(--muted);font-weight:700}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#000;border:1px solid var(--accent);color:#fff;padding:11px 20px;border-radius:24px;z-index:99;box-shadow:0 6px 30px rgba(0,0,0,.6)}
 .error{color:#ff8b6b;font-size:.88rem;min-height:1.2em}
 .success{color:var(--ok)}
+
+/* manage lots filter bar — sticky, same visual language as the homepage zone tabs */
+.mg-filters{position:sticky;top:var(--header-h,76px);z-index:40;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 0;margin-bottom:14px}
+.mg-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.mg-btn{display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:20px;padding:7px 12px;font-weight:700;font-size:.85rem;-webkit-tap-highlight-color:transparent}
+.mg-btn:hover{border-color:var(--gold)}
+.mg-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.mg-btn.on .ztab-count{background:#fff;color:var(--accent2)}
+.mg-searchwrap{max-width:360px}
+#mg-list .rank-row{flex-wrap:wrap}
+@media(max-width:560px){.mg-searchwrap{max-width:none}}
 
 /* traffic dashboard */
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}

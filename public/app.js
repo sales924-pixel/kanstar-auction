@@ -61,6 +61,9 @@ const I18N = {
     cancelled_tag: 'CANCELLED', cancelled_ok: 'Auction cancelled.',
     relist_lot: 'Relist', relist_confirm: 'Relist this lot? A new round starts right away at the same starting price.',
     relisted_ok: 'Relisted — new round is live.',
+    mg_all: 'All', mg_local: 'Local', mg_overseas: 'Overseas', mg_flash: 'Flash',
+    mg_active: 'Active', mg_ended: 'Ended', mg_cancelled: 'Cancelled', mg_sold: 'Sold (won)',
+    mg_search_ph: 'Search title or #id…', mg_more: 'Show more', mg_none: 'No lots match — try a different filter.', mg_showing: 'Showing',
     t_today: 'Visitors today', t_total: 'Total visitors', t_pages: 'Page views', t_lots: 'Lot views', t_bids: 'Bids',
     t_visitors: 'Visitors', t_unique_note: 'Unique counts — repeat visits from the same visitor count once.',
     r_today: 'Today', r_yday: 'Yesterday', r_3d: '3 days', r_7d: '7 days', r_30d: '30 days', cat_all: 'All',
@@ -133,6 +136,9 @@ const I18N = {
     cancelled_tag: 'CANCELADO', cancelled_ok: 'Subasta cancelada.',
     relist_lot: 'Republicar', relist_confirm: '¿Republicar este lote? Una nueva ronda empieza ahora con el mismo precio inicial.',
     relisted_ok: 'Republicado: la nueva ronda está activa.',
+    mg_all: 'Todos', mg_local: 'Local', mg_overseas: 'Internacional', mg_flash: 'Relámpago',
+    mg_active: 'Activos', mg_ended: 'Terminados', mg_cancelled: 'Cancelados', mg_sold: 'Vendidos',
+    mg_search_ph: 'Buscar título o #id…', mg_more: 'Mostrar más', mg_none: 'Ningún lote coincide — prueba con otro filtro.', mg_showing: 'Mostrando',
     t_today: 'Visitantes hoy', t_total: 'Visitantes totales', t_pages: 'Vistas de página', t_lots: 'Vistas de lotes', t_bids: 'Pujas',
     t_visitors: 'Visitantes', t_unique_note: 'Conteo único — las visitas repetidas del mismo visitante cuentan una sola vez.',
     r_today: 'Hoy', r_yday: 'Ayer', r_3d: '3 días', r_7d: '7 días', r_30d: '30 días', cat_all: 'Todo',
@@ -151,6 +157,9 @@ let lang = localStorage.getItem('kda_lang') || 'en';
 let trafficRange = 'today';
 let bidRange = 'today';
 let homeCat = 'all';
+let mgZone = 'all';
+let mgStatus = 'active';
+let mgQuery = '';
 const t = (k) => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -835,7 +844,31 @@ async function sellerTab(tab) {
   if (tab === 'manage') {
     const data = await api('/api/seller/lots', { headers: sellerHeaders() });
     const lots = data.lots || [];
-    body.innerHTML = lots.length ? lots.map((l) => {
+    const MG_PAGE = 30;
+    // Status groups for the filter bar: an ended lot with bids in its final
+    // round was won (a win row exists), so it counts as 'sold'; an ended lot
+    // without bids is plain 'ended'. Removed lots only appear under 'all'.
+    const mgGroup = (l) => l.status === 'active' ? 'active'
+      : l.status === 'cancelled' ? 'cancelled'
+      : l.status === 'removed' ? 'removed'
+      : (l.status === 'ended' && l.has_bids) ? 'sold' : 'ended';
+    const zoneCounts = { all: lots.length, main: 0, overseas: 0, flash: 0 };
+    const statusCounts = { all: lots.length, active: 0, ended: 0, cancelled: 0, sold: 0 };
+    for (const l of lots) {
+      if (zoneCounts[l.zone] !== undefined) zoneCounts[l.zone]++;
+      const g = mgGroup(l);
+      if (statusCounts[g] !== undefined) statusCounts[g]++;
+    }
+    const mgFiltered = () => {
+      const q = mgQuery.trim().toLowerCase();
+      return lots.filter((l) => {
+        if (mgZone !== 'all' && l.zone !== mgZone) return false;
+        if (mgStatus !== 'all' && mgGroup(l) !== mgStatus) return false;
+        if (q && !l.title.toLowerCase().includes(q) && String(l.id) !== q.replace(/^#/, '')) return false;
+        return true;
+      });
+    };
+    const mgRow = (l) => {
       const cover = l.images && l.images[0];
       const chip = l.status === 'removed'
         ? `<span class="chip" style="color:#ff8b6b;border-color:#ff8b6b;font-weight:700">${t('removed_tag')}</span>`
@@ -869,55 +902,102 @@ async function sellerTab(tab) {
           <button class="btn small secondary e-cancel" type="button">${t('cancel')}</button></p>
         </form>
       </div>`;
-    }).join('') : `<div class="empty">—</div>`;
-    $$('.edit-lot', body).forEach((b) => b.addEventListener('click', () => {
-      const form = b.closest('.panel').querySelector('.edit-form');
-      form.style.display = form.style.display === 'none' ? '' : 'none';
-    }));
-    $$('.e-cancel', body).forEach((b) => b.addEventListener('click', () => {
-      b.closest('.edit-form').style.display = 'none';
-    }));
-    $$('.edit-form', body).forEach((f) => f.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const err = f.querySelector('.e-err');
-      err.textContent = '';
-      const retailVal = f.querySelector('.e-retail').value;
-      try {
-        await api('/api/seller/lots/' + f.dataset.id, {
-          method: 'PATCH', headers: sellerHeaders(),
-          body: JSON.stringify({
-            title: f.querySelector('.e-title').value, subtitle: f.querySelector('.e-sub').value,
-            category: f.querySelector('.e-cat').value, qty_note: f.querySelector('.e-qty').value,
-            start: Number(f.querySelector('.e-start').value),
-            retail: retailVal === '' ? null : Number(retailVal),
-            description: f.querySelector('.e-desc').value,
-          }),
-        });
-        toast(t('saved_ok'));
-        sellerTab('manage');
-      } catch (e2) {
-        const code = (e2.data && e2.data.error) || '';
-        err.textContent = t('err_' + code) !== 'err_' + code ? t('err_' + code) : (code || 'Error');
+    };
+    const mgBindPanel = (panel) => {
+      const eb = panel.querySelector('.edit-lot');
+      if (eb) eb.addEventListener('click', () => {
+        const form = panel.querySelector('.edit-form');
+        form.style.display = form.style.display === 'none' ? '' : 'none';
+      });
+      const cb = panel.querySelector('.e-cancel');
+      if (cb) cb.addEventListener('click', () => {
+        panel.querySelector('.edit-form').style.display = 'none';
+      });
+      const f = panel.querySelector('.edit-form');
+      if (f) f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const err = f.querySelector('.e-err');
+        err.textContent = '';
+        const retailVal = f.querySelector('.e-retail').value;
+        try {
+          await api('/api/seller/lots/' + f.dataset.id, {
+            method: 'PATCH', headers: sellerHeaders(),
+            body: JSON.stringify({
+              title: f.querySelector('.e-title').value, subtitle: f.querySelector('.e-sub').value,
+              category: f.querySelector('.e-cat').value, qty_note: f.querySelector('.e-qty').value,
+              start: Number(f.querySelector('.e-start').value),
+              retail: retailVal === '' ? null : Number(retailVal),
+              description: f.querySelector('.e-desc').value,
+            }),
+          });
+          toast(t('saved_ok'));
+          sellerTab('manage');
+        } catch (e2) {
+          const code = (e2.data && e2.data.error) || '';
+          err.textContent = t('err_' + code) !== 'err_' + code ? t('err_' + code) : (code || 'Error');
+        }
+      });
+      const xb = panel.querySelector('.cancel-lot');
+      if (xb) xb.addEventListener('click', async () => {
+        if (!confirm(t('cancel_confirm'))) return;
+        xb.disabled = true;
+        try {
+          await api('/api/seller/lots/' + xb.dataset.id + '/cancel', { method: 'POST', headers: sellerHeaders() });
+          toast(t('cancelled_ok'));
+          sellerTab('manage');
+        } catch (err) { xb.disabled = false; toast((err.data && err.data.error) || 'Error'); }
+      });
+      const rb = panel.querySelector('.relist-lot');
+      if (rb) rb.addEventListener('click', async () => {
+        if (!confirm(t('relist_confirm'))) return;
+        rb.disabled = true;
+        try {
+          await api('/api/seller/lots/' + rb.dataset.id + '/relist', { method: 'POST', headers: sellerHeaders() });
+          toast(t('relisted_ok'));
+          sellerTab('manage');
+        } catch (err) { rb.disabled = false; toast((err.data && err.data.error) || 'Error'); }
+      });
+    };
+    body.innerHTML = `
+      <div class="mg-filters">
+        <div class="mg-row">${[['all', 'mg_all'], ['main', 'mg_local'], ['overseas', 'mg_overseas'], ['flash', 'mg_flash']].map(([z, k]) => `<button type="button" class="mg-btn ${mgZone === z ? 'on' : ''}" data-z="${z}">${t(k)}<span class="ztab-count">${zoneCounts[z]}</span></button>`).join('')}</div>
+        <div class="mg-row">${[['all', 'mg_all'], ['active', 'mg_active'], ['ended', 'mg_ended'], ['cancelled', 'mg_cancelled'], ['sold', 'mg_sold']].map(([s, k]) => `<button type="button" class="mg-btn ${mgStatus === s ? 'on' : ''}" data-s="${s}">${t(k)}<span class="ztab-count">${statusCounts[s]}</span></button>`).join('')}</div>
+        <div class="mg-searchwrap"><input id="mg-search" type="search" placeholder="${t('mg_search_ph')}" value="${esc(mgQuery)}"></div>
+        <p class="note" id="mg-count" style="margin:8px 0 0"></p>
+      </div>
+      <div id="mg-list"></div>
+      <div class="empty" id="mg-none" style="display:none">${t('mg_none')}</div>
+      <p style="text-align:center;margin:14px 0 4px"><button class="btn secondary" id="mg-more" style="width:auto;display:none">${t('mg_more')}</button></p>`;
+    const listEl = $('#mg-list', body);
+    const moreBtn = $('#mg-more', body);
+    const noneEl = $('#mg-none', body);
+    const countEl = $('#mg-count', body);
+    const mgRender = (reset) => {
+      if (reset) listEl.innerHTML = '';
+      const items = mgFiltered();
+      const rendered = listEl.children.length;
+      const next = items.slice(rendered, rendered + MG_PAGE);
+      if (next.length) {
+        listEl.insertAdjacentHTML('beforeend', next.map(mgRow).join(''));
+        [...listEl.children].slice(rendered).forEach(mgBindPanel);
       }
+      countEl.textContent = `${t('mg_showing')} ${listEl.children.length} / ${items.length}`;
+      noneEl.style.display = items.length ? 'none' : '';
+      moreBtn.style.display = listEl.children.length < items.length ? '' : 'none';
+    };
+    moreBtn.addEventListener('click', () => mgRender(false));
+    $$('.mg-btn[data-z]', body).forEach((b) => b.addEventListener('click', () => {
+      mgZone = b.dataset.z;
+      $$('.mg-btn[data-z]', body).forEach((x) => x.classList.toggle('on', x === b));
+      mgRender(true);
     }));
-    $$('.cancel-lot', body).forEach((b) => b.addEventListener('click', async () => {
-      if (!confirm(t('cancel_confirm'))) return;
-      b.disabled = true;
-      try {
-        await api('/api/seller/lots/' + b.dataset.id + '/cancel', { method: 'POST', headers: sellerHeaders() });
-        toast(t('cancelled_ok'));
-        sellerTab('manage');
-      } catch (err) { b.disabled = false; toast((err.data && err.data.error) || 'Error'); }
+    $$('.mg-btn[data-s]', body).forEach((b) => b.addEventListener('click', () => {
+      mgStatus = b.dataset.s;
+      $$('.mg-btn[data-s]', body).forEach((x) => x.classList.toggle('on', x === b));
+      mgRender(true);
     }));
-    $$('.relist-lot', body).forEach((b) => b.addEventListener('click', async () => {
-      if (!confirm(t('relist_confirm'))) return;
-      b.disabled = true;
-      try {
-        await api('/api/seller/lots/' + b.dataset.id + '/relist', { method: 'POST', headers: sellerHeaders() });
-        toast(t('relisted_ok'));
-        sellerTab('manage');
-      } catch (err) { b.disabled = false; toast((err.data && err.data.error) || 'Error'); }
-    }));
+    $('#mg-search', body).addEventListener('input', (e) => { mgQuery = e.target.value; mgRender(true); });
+    mgRender(true);
   }
   if (tab === 'traffic') {
     const d = await api('/api/seller/traffic?range=' + trafficRange, { headers: sellerHeaders() });
