@@ -652,7 +652,7 @@ const server = http.createServer(async (req, res) => {
         const title = String(body.title || '').trim();
         if (title.length < 3) return sendJson(res, 400, { error: 'title_required' });
         const zone = body.zone === 'flash' ? 'flash' : body.zone === 'overseas' ? 'overseas' : 'main';
-        const duration = zone === 'flash' ? 5 * 60 * 1000 : zone === 'overseas' ? 7 * 24 * 3600 * 1000 : 24 * 3600 * 1000;
+        const duration = zone === 'flash' ? 5 * 60 * 1000 : 24 * 3600 * 1000;
         const imagePaths = [];
         if (Array.isArray(body.images)) {
           for (const dataUrl of body.images.slice(0, 8)) {
