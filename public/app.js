@@ -157,6 +157,7 @@ let lang = localStorage.getItem('kda_lang') || 'en';
 let trafficRange = 'today';
 let bidRange = 'today';
 let homeCat = 'all';
+let homeCatOverseas = 'all';
 let mgZone = 'all';
 let mgStatus = 'active';
 let mgQuery = '';
@@ -407,12 +408,18 @@ async function pageHome() {
   const cats = Object.keys(catCounts).sort((a, b) => catCounts[b] - catCounts[a] || a.localeCompare(b));
   if (homeCat !== 'all' && !catCounts[homeCat]) homeCat = 'all';
   const main = homeCat === 'all' ? mainAll : mainAll.filter((l) => (l.category || 'Other') === homeCat);
+  const ocatCounts = {};
+  for (const l of overseas) { const c = l.category || 'Other'; ocatCounts[c] = (ocatCounts[c] || 0) + 1; }
+  const ocats = Object.keys(ocatCounts).sort((a, b) => ocatCounts[b] - ocatCounts[a] || a.localeCompare(b));
+  if (homeCatOverseas !== 'all' && !ocatCounts[homeCatOverseas]) homeCatOverseas = 'all';
+  const overseasShown = homeCatOverseas === 'all' ? overseas : overseas.filter((l) => (l.category || 'Other') === homeCatOverseas);
   let zoneBody;
   if (homeZone === 'overseas') {
     zoneBody = `<section class="overseas-zone solo">
       <h2 class="zone-title"><span class="overseas-badge">OVERSEAS</span>${t('overseas_zone')}</h2>
       <p class="overseas-banner">${t('overseas_banner')}</p>
-      ${overseas.length ? `<div class="grid">${overseas.map(lotCard).join('')}</div>` : `<p class="note">${t('overseas_empty')}</p>`}
+      ${overseas.length ? `<div class="cat-row"><button class="btn small ${homeCatOverseas === 'all' ? '' : 'secondary'} ocat-btn" data-ocat="all">${t('cat_all')} (${overseas.length})</button>${ocats.map((c) => `<button class="btn small ${homeCatOverseas === c ? '' : 'secondary'} ocat-btn" data-ocat="${esc(c)}">${esc(c)} (${ocatCounts[c]})</button>`).join('')}</div>
+      <div class="grid">${overseasShown.map(lotCard).join('')}</div>` : `<p class="note">${t('overseas_empty')}</p>`}
     </section>`;
   } else if (homeZone === 'flash') {
     zoneBody = `<section class="flash-zone solo">
@@ -455,6 +462,10 @@ async function pageHome() {
   }));
   $$('.cat-btn').forEach((b) => b.addEventListener('click', () => {
     homeCat = b.dataset.cat;
+    pageHome();
+  }));
+  $$('.ocat-btn').forEach((b) => b.addEventListener('click', () => {
+    homeCatOverseas = b.dataset.ocat;
     pageHome();
   }));
   track('page');
