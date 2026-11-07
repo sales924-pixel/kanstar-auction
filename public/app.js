@@ -13,6 +13,7 @@ const I18N = {
     live_now: 'live auctions now', err_bid_step: 'Bids go up in $0.50 steps only — please use an amount on the $0.50 ladder.', err_bid_amount: 'Please enter a valid bid amount (e.g. 12.50).',
     main_zone: 'Main Zone — 24-Hour Auctions', flash_zone: '5-Minute Flash Zone', flash_empty: 'No flash auctions right now. The seller will light this zone up soon.',
     overseas_zone: 'Overseas Zone', overseas_banner: '🌏 Overseas Zone — Ships from overseas · Arrives in 30–40 days · Consolidated shipping to our Montebello warehouse', overseas_badge: '⏳ 30–40 days delivery', overseas_empty: 'No overseas auctions right now — new items are on the way.',
+    local_banner: '🚚 Local Zone — In stock at our Montebello warehouse · Free pickup in Montebello · Nationwide delivery in 3–7 days', local_badge: '🚚 3–7 day delivery',
     current_bid: 'Current bid', starting_bid: 'Starting bid', bids: 'bids', bid: 'bid', retail: 'Retail',
     free_ship: 'FREE SHIP $30+', free_pickup: 'FREE PICKUP', time_left: 'left', ended: 'ENDED', ends_in: 'Ends in',
     view_lot: 'View & bid', photos: 'photos',
@@ -88,6 +89,7 @@ const I18N = {
     live_now: 'subastas en curso ahora', err_bid_step: 'Las pujas suben solo en pasos de $0.50 — usa un monto en esa escala.', err_bid_amount: 'Ingresa un monto de puja válido (ej. 12.50).',
     main_zone: 'Zona principal — Subastas de 24 horas', flash_zone: 'Zona Flash de 5 minutos', flash_empty: 'No hay subastas flash ahora. El vendedor activará esta zona pronto.',
     overseas_zone: 'Zona Internacional', overseas_banner: '🌏 Zona Internacional — Envío desde el extranjero · Llega en 30–40 días · Envío consolidado a nuestro almacén de Montebello', overseas_badge: '⏳ Entrega en 30–40 días', overseas_empty: 'No hay subastas internacionales ahora — nuevos artículos en camino.',
+    local_banner: '🚚 Zona Local — En stock en nuestro almacén de Montebello · Recogida gratuita en Montebello · Entrega nacional en 3–7 días', local_badge: '🚚 Entrega en 3–7 días',
     current_bid: 'Oferta actual', starting_bid: 'Oferta inicial', bids: 'ofertas', bid: 'oferta', retail: 'Precio de lista',
     free_ship: 'ENVÍO GRATIS $30+', free_pickup: 'RECOGIDA GRATIS', time_left: 'restante', ended: 'TERMINADO', ends_in: 'Termina en',
     view_lot: 'Ver y ofertar', photos: 'fotos',
@@ -382,7 +384,7 @@ function lotCard(lot) {
     <div class="body">
       <h3><a href="#/lot/${lot.id}">${esc(lot.title)}</a></h3>
       <div class="sub">${esc(lot.subtitle)}</div>
-      <div class="badges"><span class="chip ship">${t('free_ship')}</span><span class="chip ship">${t('free_pickup')}</span>${lot.zone === 'overseas' ? `<span class="chip overseas">${t('overseas_badge')}</span>` : ''}${lot.qty_note ? `<span class="chip">${esc(lot.qty_note)}</span>` : ''}</div>
+      <div class="badges"><span class="chip ship">${t('free_ship')}</span><span class="chip ship">${t('free_pickup')}</span>${lot.zone === 'overseas' ? `<span class="chip overseas">${t('overseas_badge')}</span>` : ''}${lot.zone === 'main' ? `<span class="chip ship">${t('local_badge')}</span>` : ''}${lot.qty_note ? `<span class="chip">${esc(lot.qty_note)}</span>` : ''}</div>
       <div class="price-row"><span class="price">${fmt(lot.current_cents)}</span>${lot.retail_cents ? `<span class="retail">${fmt(lot.retail_cents)}</span>` : ''}</div>
       <div class="meta"><span>${lot.has_bids ? t('current_bid') : t('starting_bid')} · ${lot.bid_count} ${lot.bid_count === 1 ? t('bid') : t('bids')}</span>
       <span class="${ended ? 'ended-tag' : ''}" data-ends="${lot.ends_at}">${ended ? t('ended') : fmtLeft(lot.ends_at - nowMs())}</span></div>
@@ -429,6 +431,7 @@ async function pageHome() {
   } else {
     zoneBody = `<div class="cat-row"><button class="btn small ${homeCat === 'all' ? '' : 'secondary'} cat-btn" data-cat="all">${t('cat_all')} (${mainAll.length})</button>${cats.map((c) => `<button class="btn small ${homeCat === c ? '' : 'secondary'} cat-btn" data-cat="${esc(c)}">${esc(c)} (${catCounts[c]})</button>`).join('')}</div>
     <h2 class="zone-title"><span class="dot"></span>${t('main_zone')}</h2>
+    <p class="overseas-banner">${t('local_banner')}</p>
     <p class="note" style="margin-top:-8px">${t('per_lot_time')}</p>
     <div class="grid">${main.map(lotCard).join('')}</div>`;
   }
@@ -500,6 +503,7 @@ async function pageLot(id) {
           <h1>${esc(lot.title)}</h1>
           <p class="sub">${esc(lot.subtitle)}</p>
           ${lot.zone === 'overseas' ? `<p class="overseas-note">${t('overseas_banner')}</p>` : ''}
+          ${lot.zone === 'main' ? `<p class="overseas-note">${t('local_banner')}</p>` : ''}
           <div class="kv"><span>${lot.has_bids ? t('current_bid') : t('starting_bid')}</span><strong style="font-size:1.3rem">${fmt(lot.current_cents)}</strong></div>
           ${lot.retail_cents ? `<div class="kv"><span>${t('retail')}</span><span style="text-decoration:line-through;color:var(--muted)">${fmt(lot.retail_cents)}</span></div>` : ''}
           <div class="kv"><span>${t('bids')}</span><span>${lot.bid_count}</span></div>
