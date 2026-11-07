@@ -10,7 +10,7 @@ const I18N = {
     seller_login: 'Seller login',
     tab_local: '📍 Local Zone', tab_overseas: '🌏 Overseas Zone', tab_flash: '⚡ 5-Min Flash',
     hero_h: 'Warehouse deals, auctioned daily', hero_p: 'Every lot is sold by Kanstar only. Each lot has its own 24-hour countdown — when it hits zero, the highest bid wins.',
-    live_now: 'live auctions now', err_bid_step: 'Bids go up in $0.50 steps only — please use an amount on the $0.50 ladder.',
+    live_now: 'live auctions now', err_bid_step: 'Bids go up in $0.50 steps only — please use an amount on the $0.50 ladder.', err_bid_amount: 'Please enter a valid bid amount (e.g. 12.50).',
     main_zone: 'Main Zone — 24-Hour Auctions', flash_zone: '5-Minute Flash Zone', flash_empty: 'No flash auctions right now. The seller will light this zone up soon.',
     overseas_zone: 'Overseas Zone', overseas_banner: '🌏 Overseas Zone — Ships from overseas · Arrives in 30–40 days · Consolidated shipping to our Montebello warehouse', overseas_badge: '⏳ 30–40 days delivery', overseas_empty: 'No overseas auctions right now — new items are on the way.',
     current_bid: 'Current bid', starting_bid: 'Starting bid', bids: 'bids', bid: 'bid', retail: 'Retail',
@@ -85,7 +85,7 @@ const I18N = {
     seller_login: 'Acceso del vendedor',
     tab_local: '📍 Zona Local', tab_overseas: '🌏 Zona Internacional', tab_flash: '⚡ Relámpago 5 min',
     hero_h: 'Ofertas de almacén, subastadas cada día', hero_p: 'Todos los lotes los vende solo Kanstar. Cada lote tiene su propia cuenta regresiva de 24 horas: cuando llega a cero, gana la oferta más alta.',
-    live_now: 'subastas en curso ahora', err_bid_step: 'Las pujas suben solo en pasos de $0.50 — usa un monto en esa escala.',
+    live_now: 'subastas en curso ahora', err_bid_step: 'Las pujas suben solo en pasos de $0.50 — usa un monto en esa escala.', err_bid_amount: 'Ingresa un monto de puja válido (ej. 12.50).',
     main_zone: 'Zona principal — Subastas de 24 horas', flash_zone: 'Zona Flash de 5 minutos', flash_empty: 'No hay subastas flash ahora. El vendedor activará esta zona pronto.',
     overseas_zone: 'Zona Internacional', overseas_banner: '🌏 Zona Internacional — Envío desde el extranjero · Llega en 30–40 días · Envío consolidado a nuestro almacén de Montebello', overseas_badge: '⏳ Entrega en 30–40 días', overseas_empty: 'No hay subastas internacionales ahora — nuevos artículos en camino.',
     current_bid: 'Oferta actual', starting_bid: 'Oferta inicial', bids: 'ofertas', bid: 'oferta', retail: 'Precio de lista',
@@ -350,6 +350,26 @@ function countbar(lot) {
     <div class="fill" style="width:${pct}%"></div><div class="txt">${left > 0 ? `${fmtLeft(left)} · ${pct.toFixed(0)}%` : t('ended')}</div></div>`;
 }
 
+/* Bid-amount validation for the text amount inputs (card quick-bid + lot
+   detail). Mirrors the old type=number min/step blocking plus the server
+   ladder: minCents is the next allowed bid; valid amounts sit on the $0.50
+   ladder from it ((cents - minCents) % 50 === 0 is equivalent to the
+   server's (amount - stepBase) % 50 check for both the no-bid and has-bid
+   cases). Returns {amount} in dollars or {error: 'invalid'|'low'|'step'}. */
+function checkBidAmount(raw, minCents) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return { error: 'invalid' };
+  const cents = Math.round(Number(s) * 100);
+  if (cents < minCents) return { error: 'low' };
+  if ((cents - minCents) % 50 !== 0) return { error: 'step' };
+  return { amount: cents / 100 };
+}
+function bidAmountErrorText(kind, minCents) {
+  if (kind === 'low') return `${t('min_next')}: ${fmt(minCents)}`;
+  if (kind === 'step') return t('err_bid_step');
+  return t('err_bid_amount');
+}
+
 /* ------------------------------- pages ------------------------------- */
 function lotCard(lot) {
   const ended = lot.status === 'ended' || lot.ends_at <= nowMs();
@@ -368,7 +388,7 @@ function lotCard(lot) {
       ${ended ? '' : `<form class="qb-form" data-lot="${lot.id}">
         ${me ? '' : `<input class="q-name" placeholder="${t('name')}" autocomplete="name" required>
         <input class="q-email" type="email" placeholder="${t('email')}" autocomplete="email" required>`}
-        <div class="bid-row"><input class="q-amount" type="number" step="0.5" min="${(qbMin / 100).toFixed(2)}" value="${(qbMin / 100).toFixed(2)}" required>
+        <div class="bid-row"><input class="q-amount" type="text" inputmode="decimal" data-min-cents="${qbMin}" value="${(qbMin / 100).toFixed(2)}" required>
         <button class="btn" type="submit">${t('place_bid')}</button></div>
         <p class="error qb-err"></p>
       </form>`}
@@ -416,7 +436,11 @@ async function pageHome() {
     const me = identity();
     const name = me ? me.name : f.querySelector('.q-name').value.trim();
     const email = me ? me.email : f.querySelector('.q-email').value.trim().toLowerCase();
-    const amount = Number(f.querySelector('.q-amount').value);
+    const amtEl = f.querySelector('.q-amount');
+    const minCents = Number(amtEl.dataset.minCents);
+    const chk = checkBidAmount(amtEl.value, minCents);
+    if (chk.error) { err.textContent = bidAmountErrorText(chk.error, minCents); return; }
+    const amount = chk.amount;
     try {
       await api('/api/bid', { method: 'POST', body: JSON.stringify({ lotId: Number(f.dataset.lot), name, email, amount }) });
       setIdentity(name, email);
@@ -478,7 +502,7 @@ async function pageLot(id) {
             <label>${t('name')}</label><input id="b-name" required value="${esc(me ? me.name : '')}" autocomplete="name">
             <label>${t('email')}</label><input id="b-email" type="email" required value="${esc(me ? me.email : '')}" autocomplete="email">
             <label>${t('bid_amount')} — ${t('min_next')}: ${fmt(minNext)}</label>
-            <input id="b-amount" type="number" step="0.5" min="${(minNext / 100).toFixed(2)}" value="${(minNext / 100).toFixed(2)}" required>
+            <input id="b-amount" type="text" inputmode="decimal" data-min-cents="${minNext}" value="${(minNext / 100).toFixed(2)}" required>
             <p class="note">${t('bid_note')}</p>
             <p class="error" id="bid-err"></p>
             <button class="btn" type="submit">${t('place_bid')}</button>
@@ -511,7 +535,10 @@ async function pageLot(id) {
   const form = $('#bid-form');
   if (form) form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = $('#b-name').value.trim(), email = $('#b-email').value.trim(), amount = Number($('#b-amount').value);
+    const name = $('#b-name').value.trim(), email = $('#b-email').value.trim();
+    const chk = checkBidAmount($('#b-amount').value, minNext);
+    if (chk.error) { $('#bid-err').textContent = bidAmountErrorText(chk.error, minNext); return; }
+    const amount = chk.amount;
     try {
       const r = await api('/api/bid', { method: 'POST', body: JSON.stringify({ lotId: lot.id, name, email, amount }) });
       setIdentity(name, email.toLowerCase());

@@ -83,15 +83,15 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 .card .meta{color:var(--muted);font-size:.78rem;display:flex;justify-content:space-between}
 .card .badges{display:flex;gap:6px;flex-wrap:wrap}
 .qb-form{margin-top:10px;display:flex;flex-direction:column;gap:8px}
-.qb-form .bid-row{display:flex;gap:8px}
-.qb-form .bid-row input{flex:1;min-width:0}
-.qb-form .bid-row .btn{flex:0 0 auto;width:auto}
+.qb-form .bid-row{display:flex;flex-direction:column;gap:8px}
+.qb-form .bid-row input{flex:1 1 auto;min-width:0}
+.qb-form .bid-row .btn{width:100%;white-space:nowrap}
 .qb-form .error{margin:0}
 .qb-form .bid-row input{padding-left:8px;padding-right:8px}
-.qb-form .q-amount{-moz-appearance:textfield;appearance:textfield}
-.qb-form .q-amount::-webkit-outer-spin-button,.qb-form .q-amount::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-@media(max-width:560px){.qb-form .bid-row{gap:5px}.qb-form .bid-row input{padding-left:4px;padding-right:4px;min-width:52px}}
-@media(max-width:400px){.qb-form .bid-row .btn{font-size:.8rem;padding-left:5px;padding-right:5px}.qb-form .q-amount{font-size:15px}.qb-form .bid-row input{padding-left:2px;padding-right:2px}}
+.qb-form .q-amount{font-size:16px;text-align:left;letter-spacing:0}
+#bid-form #b-amount{font-size:16px;text-align:left;letter-spacing:0}
+@media(max-width:560px){.qb-form .bid-row{gap:6px}.qb-form .bid-row input{padding-left:6px;padding-right:6px}}
+@media(max-width:400px){.qb-form .bid-row .btn{font-size:.85rem}.qb-form .bid-row input{padding-left:6px;padding-right:6px}}
 .chip{background:#171210;border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:2px 9px;font-size:.72rem}
 .chip.ship{background:#3a1503;color:var(--gold);border-color:#6b2d08;font-weight:700}
 .chip.overseas{background:#123243;color:#9fd8e8;border-color:#1f6f8b;font-weight:700}
