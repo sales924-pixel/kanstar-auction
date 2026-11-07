@@ -14,6 +14,7 @@ const I18N = {
     main_zone: 'Main Zone — 24-Hour Auctions', flash_zone: '5-Minute Flash Zone', flash_empty: 'No flash auctions right now. The seller will light this zone up soon.',
     overseas_zone: 'Overseas Zone', overseas_banner: '🌏 Overseas Zone — Ships from overseas · Arrives in 30–40 days · Consolidated shipping to our Montebello warehouse', overseas_badge: '⏳ 30–40 days delivery', overseas_empty: 'No overseas auctions right now — new items are on the way.',
     local_banner: '🚚 Local Zone — In stock at our Montebello warehouse · Free pickup in Montebello · Nationwide delivery in 3–7 days', local_badge: '🚚 3–7 day delivery',
+    sourcing_title: 'Want Something Else? We Can Source It For You 🌏', sourcing_body: 'Looking for a product that is not listed here? Tell us what you want to buy — we offer overseas sourcing. Leave us a message with the product name, and a photo of the price tag if you have one, and we will quote you a price.', sourcing_btn: 'Leave a Message',
     current_bid: 'Current bid', starting_bid: 'Starting bid', bids: 'bids', bid: 'bid', retail: 'Retail',
     free_ship: 'FREE SHIP $30+', free_pickup: 'FREE PICKUP', time_left: 'left', ended: 'ENDED', ends_in: 'Ends in',
     view_lot: 'View & bid', photos: 'photos',
@@ -90,6 +91,7 @@ const I18N = {
     main_zone: 'Zona principal — Subastas de 24 horas', flash_zone: 'Zona Flash de 5 minutos', flash_empty: 'No hay subastas flash ahora. El vendedor activará esta zona pronto.',
     overseas_zone: 'Zona Internacional', overseas_banner: '🌏 Zona Internacional — Envío desde el extranjero · Llega en 30–40 días · Envío consolidado a nuestro almacén de Montebello', overseas_badge: '⏳ Entrega en 30–40 días', overseas_empty: 'No hay subastas internacionales ahora — nuevos artículos en camino.',
     local_banner: '🚚 Zona Local — En stock en nuestro almacén de Montebello · Recogida gratuita en Montebello · Entrega nacional en 3–7 días', local_badge: '🚚 Entrega en 3–7 días',
+    sourcing_title: '¿Buscas algo más? ¡Lo conseguimos para ti! 🌏', sourcing_body: '¿Buscas un producto que no está publicado? Dinos qué quieres comprar — ofrecemos servicio de compras en el extranjero. Déjanos un mensaje con el nombre del producto y una foto de la etiqueta de precio si la tienes, y te damos un precio.', sourcing_btn: 'Déjanos un mensaje',
     current_bid: 'Oferta actual', starting_bid: 'Oferta inicial', bids: 'ofertas', bid: 'oferta', retail: 'Precio de lista',
     free_ship: 'ENVÍO GRATIS $30+', free_pickup: 'RECOGIDA GRATIS', time_left: 'restante', ended: 'TERMINADO', ends_in: 'Termina en',
     view_lot: 'Ver y ofertar', photos: 'fotos',
@@ -420,6 +422,7 @@ async function pageHome() {
     zoneBody = `<section class="overseas-zone solo">
       <h2 class="zone-title"><span class="overseas-badge">OVERSEAS</span>${t('overseas_zone')}</h2>
       <p class="overseas-banner">${t('overseas_banner')}</p>
+      <div class="sourcing-banner"><h3>${t('sourcing_title')}</h3><p>${t('sourcing_body')}</p><a class="btn small" href="#/contact">${t('sourcing_btn')}</a></div>
       ${overseas.length ? `<div class="cat-row"><button class="btn small ${homeCatOverseas === 'all' ? '' : 'secondary'} ocat-btn" data-ocat="all">${t('cat_all')} (${overseas.length})</button>${ocats.map((c) => `<button class="btn small ${homeCatOverseas === c ? '' : 'secondary'} ocat-btn" data-ocat="${esc(c)}">${esc(c)} (${ocatCounts[c]})</button>`).join('')}</div>
       <div class="grid">${overseasShown.map(lotCard).join('')}</div>` : `<p class="note">${t('overseas_empty')}</p>`}
     </section>`;

@@ -62,6 +62,10 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 .overseas-zone .zone-title{color:#9fd8e8;margin-top:0}
 .overseas-badge{background:#1f6f8b;color:#fff;font-weight:800;padding:3px 10px;border-radius:20px;font-size:.75rem;letter-spacing:.08em}
 .overseas-banner{background:#123243;border:1px solid #1f6f8b;color:#cfeef7;border-radius:10px;padding:10px 12px;font-weight:600;margin:0 0 14px}
+.sourcing-banner{background:#123243;border:1px solid var(--gold);border-radius:10px;padding:14px 16px;margin:0 0 14px;color:#cfeef7}
+.sourcing-banner h3{margin:0 0 6px;font-size:1.15rem;color:#fff}
+.sourcing-banner p{margin:0 0 12px;line-height:1.5}
+.sourcing-banner .btn{display:inline-block}
 .overseas-note{background:#123243;border:1px solid #1f6f8b;color:#cfeef7;border-radius:10px;padding:10px 12px;font-weight:600;margin:10px 0}
 
 /* lot cards */

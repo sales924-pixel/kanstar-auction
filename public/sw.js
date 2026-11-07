@@ -1,6 +1,6 @@
 /* Kanstar Daily Auction — minimal service worker.
    Static shell: cache-first. API: network-first (never serve stale lots/bids). */
-const CACHE = 'kanstar-static-v30';
+const CACHE = 'kanstar-static-v31';
 const SHELL = [
   '/',
   '/index.html',
