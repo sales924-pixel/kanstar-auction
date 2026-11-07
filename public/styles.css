@@ -28,6 +28,22 @@ label{font-size:.86rem;color:var(--muted);display:block;margin:10px 0 4px}
 .lang-toggle button{background:transparent;border:0;color:var(--muted);padding:6px 12px;font-weight:700}
 .lang-toggle button.on{background:var(--accent);color:#fff}
 
+/* zone tab bar — sticky directly under the sticky header (top offset fed by JS via --header-h) */
+.zone-tabs{position:sticky;top:var(--header-h,76px);z-index:45;background:rgba(16,12,10,.97);border-bottom:1px solid var(--line);box-shadow:0 6px 14px rgba(0,0,0,.35)}
+.zone-tabs-inner{max-width:1280px;margin:0 auto;padding:10px 18px;display:flex;gap:10px}
+.ztab{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--bg2);border:1px solid var(--line);color:var(--text);border-radius:24px;padding:11px 10px;font-weight:800;font-size:1rem;line-height:1.15;-webkit-tap-highlight-color:transparent}
+.ztab:hover{border-color:var(--gold)}
+.ztab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.ztab-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ztab-count{background:rgba(0,0,0,.45);color:var(--gold);border-radius:12px;padding:1px 8px;font-size:.78rem;font-weight:900;flex:none}
+.ztab.on .ztab-count{background:#fff;color:var(--accent2)}
+.overseas-zone.solo,.flash-zone.solo{margin-top:2px}
+@media(max-width:560px){
+  .zone-tabs-inner{padding:8px 10px;gap:6px}
+  .ztab{font-size:.8rem;padding:10px 4px;gap:5px;border-radius:18px}
+  .ztab-count{font-size:.68rem;padding:1px 6px}
+}
+
 /* layout */
 main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 .hero{background:linear-gradient(120deg,#2b1a12,#3d1508);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;margin-bottom:22px}

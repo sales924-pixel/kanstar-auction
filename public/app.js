@@ -8,6 +8,7 @@ const I18N = {
     footer_pickup_h: 'Warehouse pickup', footer_help_h: 'Questions?', footer_contact: 'Contact us',
     footer_pickup: 'Free pickup on any winning bid. Shipping: free on wins of $30+, otherwise +$5. Local delivery next day; nationwide 3–7 days.',
     seller_login: 'Seller login',
+    tab_local: '📍 Local Zone', tab_overseas: '🌏 Overseas Zone', tab_flash: '⚡ 5-Min Flash',
     hero_h: 'Warehouse deals, auctioned daily', hero_p: 'Every lot is sold by Kanstar only. Each lot has its own 24-hour countdown — when it hits zero, the highest bid wins.',
     live_now: 'live auctions now', err_bid_step: 'Bids go up in $0.50 steps only — please use an amount on the $0.50 ladder.',
     main_zone: 'Main Zone — 24-Hour Auctions', flash_zone: '5-Minute Flash Zone', flash_empty: 'No flash auctions right now. The seller will light this zone up soon.',
@@ -79,6 +80,7 @@ const I18N = {
     footer_pickup_h: 'Recogida en el almacén', footer_help_h: '¿Preguntas?', footer_contact: 'Contáctanos',
     footer_pickup: 'Recogida gratis con cualquier oferta ganadora. Envío: gratis en premios de $30 o más; si no, +$5. Entrega local al día siguiente; resto del país 3–7 días.',
     seller_login: 'Acceso del vendedor',
+    tab_local: '📍 Zona Local', tab_overseas: '🌏 Zona Internacional', tab_flash: '⚡ Relámpago 5 min',
     hero_h: 'Ofertas de almacén, subastadas cada día', hero_p: 'Todos los lotes los vende solo Kanstar. Cada lote tiene su propia cuenta regresiva de 24 horas: cuando llega a cero, gana la oferta más alta.',
     live_now: 'subastas en curso ahora', err_bid_step: 'Las pujas suben solo en pasos de $0.50 — usa un monto en esa escala.',
     main_zone: 'Zona principal — Subastas de 24 horas', flash_zone: 'Zona Flash de 5 minutos', flash_empty: 'No hay subastas flash ahora. El vendedor activará esta zona pronto.',
@@ -180,6 +182,34 @@ function track(type, lotId) {
 }
 const identity = () => { try { return JSON.parse(localStorage.getItem('kda_bidder') || 'null'); } catch { return null; } };
 const setIdentity = (name, email) => localStorage.setItem('kda_bidder', JSON.stringify({ name, email }));
+
+/* --------------------- home zone tabs (Local / Overseas / Flash) ----- */
+let homeZone = 'local';
+const ZONE_HASH = { '#local': 'local', '#overseas': 'overseas', '#flash': 'flash' };
+/* The tab bar is sticky under the sticky header; feed it the header's real
+   height (the header wraps on narrow screens) so it never overlaps content. */
+function syncHeaderH() {
+  const h = document.querySelector('.site-header');
+  if (h) document.documentElement.style.setProperty('--header-h', h.offsetHeight + 'px');
+}
+window.addEventListener('resize', syncHeaderH);
+syncHeaderH();
+$$('.ztab').forEach((b) => b.addEventListener('click', () => {
+  homeZone = b.dataset.zone;
+  const target = '#' + homeZone;
+  if (location.hash === target) render(); // same hash: no hashchange fires
+  else location.hash = target; // hashchange -> render() -> back to top
+}));
+function paintZoneTabs(counts) {
+  const bar = $('#zone-tabs');
+  if (bar) bar.style.display = '';
+  $$('.ztab').forEach((b) => b.classList.toggle('on', b.dataset.zone === homeZone));
+  if (counts) for (const z of ['local', 'overseas', 'flash']) {
+    const c = $('#ztc-' + z);
+    if (c) c.textContent = counts[z];
+  }
+}
+function hideZoneTabs() { const bar = $('#zone-tabs'); if (bar) bar.style.display = 'none'; }
 
 /* ---------------------- floating My Bids window ---------------------- */
 let bidsFabData = null; // cached /api/my/bids payload for the floating window
@@ -348,21 +378,28 @@ async function pageHome() {
   const cats = Object.keys(catCounts).sort((a, b) => catCounts[b] - catCounts[a] || a.localeCompare(b));
   if (homeCat !== 'all' && !catCounts[homeCat]) homeCat = 'all';
   const main = homeCat === 'all' ? mainAll : mainAll.filter((l) => (l.category || 'Other') === homeCat);
-  app.innerHTML = `
-    <div class="hero"><h1>${t('hero_h')}</h1><p>${t('hero_p')}</p><p class="hero-stat"><span class="live-dot"></span><strong>${mainAll.length + overseas.length + flash.length}</strong>&nbsp;${t('live_now')}</p></div>
-    <div class="cat-row"><button class="btn small ${homeCat === 'all' ? '' : 'secondary'} cat-btn" data-cat="all">${t('cat_all')} (${mainAll.length})</button>${cats.map((c) => `<button class="btn small ${homeCat === c ? '' : 'secondary'} cat-btn" data-cat="${esc(c)}">${esc(c)} (${catCounts[c]})</button>`).join('')}</div>
-    <h2 class="zone-title"><span class="dot"></span>${t('main_zone')}</h2>
-    <p class="note" style="margin-top:-8px">${t('per_lot_time')}</p>
-    <div class="grid">${main.map(lotCard).join('')}</div>
-    <section class="overseas-zone">
+  let zoneBody;
+  if (homeZone === 'overseas') {
+    zoneBody = `<section class="overseas-zone solo">
       <h2 class="zone-title"><span class="overseas-badge">OVERSEAS</span>${t('overseas_zone')}</h2>
       <p class="overseas-banner">${t('overseas_banner')}</p>
       ${overseas.length ? `<div class="grid">${overseas.map(lotCard).join('')}</div>` : `<p class="note">${t('overseas_empty')}</p>`}
-    </section>
-    <section class="flash-zone">
+    </section>`;
+  } else if (homeZone === 'flash') {
+    zoneBody = `<section class="flash-zone solo">
       <h2 class="zone-title"><span class="flash-badge">FLASH</span>${t('flash_zone')}</h2>
       ${flash.length ? `<div class="grid">${flash.map(lotCard).join('')}</div>` : `<p class="note">${t('flash_empty')}</p>`}
     </section>`;
+  } else {
+    zoneBody = `<div class="cat-row"><button class="btn small ${homeCat === 'all' ? '' : 'secondary'} cat-btn" data-cat="all">${t('cat_all')} (${mainAll.length})</button>${cats.map((c) => `<button class="btn small ${homeCat === c ? '' : 'secondary'} cat-btn" data-cat="${esc(c)}">${esc(c)} (${catCounts[c]})</button>`).join('')}</div>
+    <h2 class="zone-title"><span class="dot"></span>${t('main_zone')}</h2>
+    <p class="note" style="margin-top:-8px">${t('per_lot_time')}</p>
+    <div class="grid">${main.map(lotCard).join('')}</div>`;
+  }
+  app.innerHTML = `
+    <div class="hero"><h1>${t('hero_h')}</h1><p>${t('hero_p')}</p><p class="hero-stat"><span class="live-dot"></span><strong>${mainAll.length + overseas.length + flash.length}</strong>&nbsp;${t('live_now')}</p></div>
+    ${zoneBody}`;
+  paintZoneTabs({ local: mainAll.length, overseas: overseas.length, flash: flash.length });
   $$('.qb-form').forEach((f) => f.addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = f.querySelector('.qb-err');
@@ -1079,9 +1116,16 @@ async function render() {
   const hash = location.hash || '#/';
   const parts = hash.replace(/^#\//, '').split('/');
   window.scrollTo(0, 0);
+  syncHeaderH();
   updateBidsFab();
+  // Zone deep links: #local / #overseas / #flash open the home page on that zone.
+  if (ZONE_HASH[hash]) homeZone = ZONE_HASH[hash];
+  else if (hash === '#/' || hash === '#') homeZone = 'local';
+  const known = ['lot', 'my-bids', 'rules', 'contact', 'my-messages', 'checkout', 'seller'];
+  const isHome = !!ZONE_HASH[hash] || hash === '#/' || hash === '#' || !known.includes(parts[0]);
+  if (!isHome) hideZoneTabs();
   try {
-    if (hash === '#/' || hash === '#') { setNav('home'); await pageHome(); }
+    if (isHome) { setNav('home'); await pageHome(); }
     else if (parts[0] === 'lot') { setNav('home'); await pageLot(Number(parts[1])); }
     else if (parts[0] === 'my-bids') { setNav('mybids'); await pageMyBids(); }
     else if (parts[0] === 'rules') { setNav('rules'); pageRules(); }
@@ -1089,7 +1133,6 @@ async function render() {
     else if (parts[0] === 'my-messages') { setNav('mymsg'); pageMyMessages(); }
     else if (parts[0] === 'checkout') { setNav('mybids'); await pageCheckout(Number(parts[1])); }
     else if (parts[0] === 'seller') { setNav(''); await pageSeller(); }
-    else { setNav('home'); await pageHome(); }
   } catch (err) {
     app.innerHTML = `<div class="empty">Error: ${esc(err.message || 'failed to load')}</div>`;
   }
