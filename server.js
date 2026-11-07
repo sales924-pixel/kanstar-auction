@@ -50,7 +50,7 @@ db.exec(`
 CREATE TABLE IF NOT EXISTS lots(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL, subtitle TEXT DEFAULT '', category TEXT DEFAULT '',
-  zone TEXT NOT NULL DEFAULT 'main',           -- 'main' | 'flash'
+  zone TEXT NOT NULL DEFAULT 'main',           -- 'main' | 'flash' | 'overseas'
   start_cents INTEGER NOT NULL, retail_cents INTEGER,
   qty_note TEXT DEFAULT '', description TEXT DEFAULT '',
   images TEXT NOT NULL DEFAULT '[]',           -- JSON array of /images/... paths
@@ -268,9 +268,10 @@ function finalizeLot(lot) {
     db.prepare("UPDATE lots SET round=round+1, created_at=?, ends_at=?, status='active' WHERE id=?")
       .run(now(), now() + lot.duration_ms, lot.id);
   } else if (!top) {
-    // main zone, no bids — unsold: automatically relist in place with a fresh
-    // round (same lot, round+1, new full duration). Keeps cycling until the
-    // lot sells or the seller removes it; no duplicate lots ever appear.
+    // main/overseas zone, no bids — unsold: automatically relist in place
+    // with a fresh round (same lot, round+1, new full duration). Keeps
+    // cycling until the lot sells or the seller removes it; no duplicate
+    // lots ever appear.
     db.prepare("UPDATE lots SET round=round+1, created_at=?, ends_at=?, status='active' WHERE id=?")
       .run(now(), now() + lot.duration_ms, lot.id);
     endingSoonSent.delete(lot.id);
@@ -293,11 +294,11 @@ function lifecycleSweep() {
       }
     }
   }
-  // Auto-relist backstop: a main-zone lot sitting in 'ended' with no win
-  // recorded for its round ended unsold (e.g. it closed before auto-relist
-  // existed) — open a fresh round in place. Sold lots have a win row and are
-  // never touched; removed lots are excluded by the status filter.
-  const stale = db.prepare("SELECT * FROM lots WHERE status='ended' AND zone='main'").all();
+  // Auto-relist backstop: a main/overseas-zone lot sitting in 'ended' with
+  // no win recorded for its round ended unsold (e.g. it closed before
+  // auto-relist existed) — open a fresh round in place. Sold lots have a win
+  // row and are never touched; removed lots are excluded by the status filter.
+  const stale = db.prepare("SELECT * FROM lots WHERE status='ended' AND zone IN ('main','overseas')").all();
   for (const lot of stale) {
     const win = db.prepare('SELECT id FROM wins WHERE lot_id=? AND round=?').get(lot.id, lot.round);
     if (!win) {
@@ -650,8 +651,8 @@ const server = http.createServer(async (req, res) => {
         const body = await readBody(req);
         const title = String(body.title || '').trim();
         if (title.length < 3) return sendJson(res, 400, { error: 'title_required' });
-        const zone = body.zone === 'flash' ? 'flash' : 'main';
-        const duration = zone === 'flash' ? 5 * 60 * 1000 : 24 * 3600 * 1000;
+        const zone = body.zone === 'flash' ? 'flash' : body.zone === 'overseas' ? 'overseas' : 'main';
+        const duration = zone === 'flash' ? 5 * 60 * 1000 : zone === 'overseas' ? 7 * 24 * 3600 * 1000 : 24 * 3600 * 1000;
         const imagePaths = [];
         if (Array.isArray(body.images)) {
           for (const dataUrl of body.images.slice(0, 8)) {
