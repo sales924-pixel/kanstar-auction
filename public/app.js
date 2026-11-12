@@ -194,6 +194,16 @@ async function api(pathname, opts = {}) {
 function track(type, lotId) {
   fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, lotId: lotId || null }) }).catch(() => {});
 }
+// OpenAI Ads Pixel: report a user's first successful bid, once per user.
+function trackFirstBid(email) {
+  try {
+    if (!window.oaiq) return;
+    const key = 'oai_first_bid_' + (email || 'anon').toLowerCase();
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, '1');
+    window.oaiq('measure', 'custom', { type: 'custom' }, { custom_event_name: 'first_bid_placed', event_id: 'first_bid_' + Date.now() });
+  } catch (e) { /* measurement must never block bidding */ }
+}
 const identity = () => { try { return JSON.parse(localStorage.getItem('kda_bidder') || 'null'); } catch { return null; } };
 const setIdentity = (name, email) => localStorage.setItem('kda_bidder', JSON.stringify({ name, email }));
 
@@ -457,6 +467,7 @@ async function pageHome() {
     try {
       await api('/api/bid', { method: 'POST', body: JSON.stringify({ lotId: Number(f.dataset.lot), name, email, amount }) });
       setIdentity(name, email);
+      trackFirstBid(email);
       refreshBidsWidget();
       toast(t('bid_ok'));
       pageHome();
@@ -560,6 +571,7 @@ async function pageLot(id) {
     try {
       const r = await api('/api/bid', { method: 'POST', body: JSON.stringify({ lotId: lot.id, name, email, amount }) });
       setIdentity(name, email.toLowerCase());
+      trackFirstBid(email.toLowerCase());
       refreshBidsWidget();
       toast(t('bid_ok'));
       pageLot(id);
