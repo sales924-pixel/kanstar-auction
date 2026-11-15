@@ -559,14 +559,25 @@ const server = http.createServer(async (req, res) => {
       const base = { ok: true, order_id: orderId, item_cents: item, shipping_cents: shipping, tax_cents: tax, discount_cents: discount, promo_state: promo.state, total_cents: total };
       if (!STRIPE_ENABLED) return sendJson(res, 200, base); // record-only mode (no keys configured)
       try {
-        const session = await stripeApi('POST', '/checkout/sessions', {
+        const sessionParams = {
           mode: 'payment',
           customer_email: bidder.email,
           line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: total, product_data: { name: `${win.title} — Kanstar Daily Auction` } } }],
           metadata: { order_id: String(orderId) },
           success_url: `${SITE_URL}/?paid=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${SITE_URL}/?pay_cancelled=${orderId}`,
-        });
+        };
+        let session;
+        try {
+          /* Winner payment window (seller policy, 2026-11-14): the card
+             payment link expires 30 minutes after it is created. */
+          session = await stripeApi('POST', '/checkout/sessions', { ...sessionParams, expires_at: Math.floor(Date.now() / 1000) + 30 * 60 });
+        } catch (e1) {
+          /* Never let the expiry parameter break checkout: fall back to a
+             plain session (Stripe default lifetime) for this order. */
+          console.error(`[stripe] session create with 30-min expiry failed for order ${orderId}: ${e1.message} — retrying without expiry`);
+          session = await stripeApi('POST', '/checkout/sessions', sessionParams);
+        }
         db.prepare('UPDATE orders SET stripe_session_id=? WHERE id=?').run(session.id, orderId);
         return sendJson(res, 200, { ...base, checkout_url: session.url });
       } catch (e) {
