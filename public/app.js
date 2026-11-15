@@ -12,8 +12,8 @@ const I18N = {
     hero_h: 'Warehouse deals, auctioned daily', hero_p: 'Every lot is sold by Kanstar only. Each lot has its own 24-hour countdown — when it hits zero, the highest bid wins.',
     live_now: 'live auctions now', err_bid_step: 'Bids go up in $0.50 steps only — please use an amount on the $0.50 ladder.', err_bid_amount: 'Please enter a valid bid amount (e.g. 12.50).',
     main_zone: 'Main Zone — 24-Hour Auctions', flash_zone: '5-Minute Flash Zone', flash_empty: 'No flash auctions right now. Flash rounds pop up during the day — check back soon, or browse the Local Zone for deals ending today.',
-    overseas_zone: 'Overseas Zone', overseas_banner: '🌏 Overseas Zone — Ships from overseas · Arrives at our Montebello warehouse in 10–15 days · Then free pickup next day, or US delivery in 3–7 days', overseas_badge: '⏳ 10–15 days delivery', overseas_empty: 'No overseas auctions right now — new items are on the way.',
-    ending_soon_h: '⏰ Ending soon — local stock, ready for pickup today',
+    overseas_zone: 'Overseas Zone', overseas_banner: '🌏 Overseas Zone — Ships from overseas · Arrives at our Montebello warehouse in 10–15 days · Then free pickup next day, or US delivery in 3–7 days', overseas_badge: '⏳ Est. 10–15 days to Montebello warehouse', overseas_empty: 'No overseas auctions right now — new items are on the way.',
+    ending_soon_h: '⏰ Ending soon — local stock · pickup after you win & confirm', view_local: 'View local lots',
     arr_est: '🌏 Overseas item: estimated arrival at our Montebello warehouse: __D1__ – __D2__ (10–15 days after you win). After it arrives: free pickup the next day, or US delivery in 3–7 days.',
     local_banner: '🚚 Local Zone — In stock at our Montebello warehouse · Free pickup in Montebello · Nationwide delivery in 3–7 days', local_badge: '🚚 3–7 day delivery',
     sourcing_title: 'Want Something Else? We Can Source It For You 🌏', sourcing_body: 'Looking for a product that is not listed here? Tell us what you want to buy — we offer overseas sourcing. Leave us a message with the product name, and a photo of the price tag if you have one, and we will quote you a price.', sourcing_btn: 'Leave a Message',
@@ -91,8 +91,8 @@ const I18N = {
     hero_h: 'Ofertas de almacén, subastadas cada día', hero_p: 'Todos los lotes los vende solo Kanstar. Cada lote tiene su propia cuenta regresiva de 24 horas: cuando llega a cero, gana la oferta más alta.',
     live_now: 'subastas en curso ahora', err_bid_step: 'Las pujas suben solo en pasos de $0.50 — usa un monto en esa escala.', err_bid_amount: 'Ingresa un monto de puja válido (ej. 12.50).',
     main_zone: 'Zona principal — Subastas de 24 horas', flash_zone: 'Zona Flash de 5 minutos', flash_empty: 'No hay subastas flash ahora. Las rondas flash aparecen durante el día: vuelve pronto o explora la Zona Local para ver las ofertas que terminan hoy.',
-    overseas_zone: 'Zona Internacional', overseas_banner: '🌏 Zona Internacional — Envío desde el extranjero · Llega a nuestro almacén de Montebello en 10–15 días · Luego recogida gratuita al día siguiente, o entrega en EE. UU. en 3–7 días', overseas_badge: '⏳ Entrega en 10–15 días', overseas_empty: 'No hay subastas internacionales ahora — nuevos artículos en camino.',
-    ending_soon_h: '⏰ Termina pronto — stock local, listo para recoger hoy',
+    overseas_zone: 'Zona Internacional', overseas_banner: '🌏 Zona Internacional — Envío desde el extranjero · Llega a nuestro almacén de Montebello en 10–15 días · Luego recogida gratuita al día siguiente, o entrega en EE. UU. en 3–7 días', overseas_badge: '⏳ Aprox. 10–15 días al almacén de Montebello', overseas_empty: 'No hay subastas internacionales ahora — nuevos artículos en camino.',
+    ending_soon_h: '⏰ Termina pronto — stock local · recoge tras ganar y confirmar', view_local: 'Ver lotes locales',
     arr_est: '🌏 Artículo internacional: llegada estimada a nuestro almacén de Montebello: __D1__ – __D2__ (10–15 días después de ganar). Al llegar: recogida gratuita al día siguiente, o entrega en EE. UU. en 3–7 días.',
     local_banner: '🚚 Zona Local — En stock en nuestro almacén de Montebello · Recogida gratuita en Montebello · Entrega nacional en 3–7 días', local_badge: '🚚 Entrega en 3–7 días',
     sourcing_title: '¿Buscas algo más? ¡Lo conseguimos para ti! 🌏', sourcing_body: '¿Buscas un producto que no está publicado? Dinos qué quieres comprar — ofrecemos servicio de compras en el extranjero. Déjanos un mensaje con el nombre del producto y una foto de la etiqueta de precio si la tienes, y te damos un precio.', sourcing_btn: 'Déjanos un mensaje',
@@ -453,7 +453,7 @@ async function pageHome() {
   } else if (homeZone === 'flash') {
     zoneBody = `<section class="flash-zone solo">
       <h2 class="zone-title"><span class="flash-badge">FLASH</span>${t('flash_zone')}</h2>
-      ${flash.length ? `<div class="grid">${flash.map(lotCard).join('')}</div>` : `<p class="note">${t('flash_empty')}</p>`}
+      ${flash.length ? `<div class="grid">${flash.map(lotCard).join('')}</div>` : `<p class="note">${t('flash_empty')}</p><p><a class="btn small" href="#local">${t('view_local')}</a></p>`}
     </section>`;
   } else {
     const soon = [...mainAll].filter((l) => l.ends_at > nowMs()).sort((a, b) => a.ends_at - b.ends_at).slice(0, 8);

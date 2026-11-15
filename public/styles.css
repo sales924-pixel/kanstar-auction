@@ -44,6 +44,12 @@ label{font-size:.86rem;color:var(--muted);display:block;margin:10px 0 4px}
   .ztab-label{white-space:normal;text-align:center;line-height:1.15}
   .ztab-count{font-size:.68rem;padding:1px 6px}
 }
+/* very narrow phones: stack tab label over its count so words like
+   "Overseas" are never truncated */
+@media(max-width:360px){
+  .ztab{flex-direction:column;gap:2px;font-size:.74rem;padding:8px 2px}
+  .ztab-count{font-size:.62rem;padding:0 5px}
+}
 
 /* layout */
 main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
@@ -260,4 +266,4 @@ th{color:var(--muted);font-weight:700}
 .bid-row-item .ttl{font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bid-row-item .det{color:var(--muted);font-size:.78rem;margin-top:2px}
 .bids-pop .pop-foot{margin-top:10px;text-align:right}
-@media(max-width:560px){.bids-fab{bottom:84px;right:12px;padding:10px 15px}.bids-pop{right:12px;bottom:140px}}
+@media(max-width:560px){.bids-fab{bottom:84px;right:12px;padding:8px 12px;font-size:.85rem}.bids-pop{right:12px;bottom:140px}main{padding-bottom:120px}}
