@@ -11,8 +11,10 @@ const I18N = {
     tab_local: '📍 Local Zone', tab_overseas: '🌏 Overseas Zone', tab_flash: '⚡ 5-Min Flash',
     hero_h: 'Warehouse deals, auctioned daily', hero_p: 'Every lot is sold by Kanstar only. Each lot has its own 24-hour countdown — when it hits zero, the highest bid wins.',
     live_now: 'live auctions now', err_bid_step: 'Bids go up in $0.50 steps only — please use an amount on the $0.50 ladder.', err_bid_amount: 'Please enter a valid bid amount (e.g. 12.50).',
-    main_zone: 'Main Zone — 24-Hour Auctions', flash_zone: '5-Minute Flash Zone', flash_empty: 'No flash auctions right now. The seller will light this zone up soon.',
-    overseas_zone: 'Overseas Zone', overseas_banner: '🌏 Overseas Zone — Ships from overseas · Arrives in 10–15 days · Fast consolidated shipping to our Montebello warehouse', overseas_badge: '⏳ 10–15 days delivery', overseas_empty: 'No overseas auctions right now — new items are on the way.',
+    main_zone: 'Main Zone — 24-Hour Auctions', flash_zone: '5-Minute Flash Zone', flash_empty: 'No flash auctions right now. Flash rounds pop up during the day — check back soon, or browse the Local Zone for deals ending today.',
+    overseas_zone: 'Overseas Zone', overseas_banner: '🌏 Overseas Zone — Ships from overseas · Arrives at our Montebello warehouse in 10–15 days · Then free pickup next day, or US delivery in 3–7 days', overseas_badge: '⏳ 10–15 days delivery', overseas_empty: 'No overseas auctions right now — new items are on the way.',
+    ending_soon_h: '⏰ Ending soon — local stock, ready for pickup today',
+    arr_est: '🌏 Overseas item: estimated arrival at our Montebello warehouse: __D1__ – __D2__ (10–15 days after you win). After it arrives: free pickup the next day, or US delivery in 3–7 days.',
     local_banner: '🚚 Local Zone — In stock at our Montebello warehouse · Free pickup in Montebello · Nationwide delivery in 3–7 days', local_badge: '🚚 3–7 day delivery',
     sourcing_title: 'Want Something Else? We Can Source It For You 🌏', sourcing_body: 'Looking for a product that is not listed here? Tell us what you want to buy — we offer overseas sourcing. Leave us a message with the product name, and a photo of the price tag if you have one, and we will quote you a price.', sourcing_btn: 'Leave a Message',
     current_bid: 'Current bid', starting_bid: 'Starting bid', bids: 'bids', bid: 'bid', retail: 'Retail',
@@ -88,8 +90,10 @@ const I18N = {
     tab_local: '📍 Zona Local', tab_overseas: '🌏 Zona Internacional', tab_flash: '⚡ Relámpago 5 min',
     hero_h: 'Ofertas de almacén, subastadas cada día', hero_p: 'Todos los lotes los vende solo Kanstar. Cada lote tiene su propia cuenta regresiva de 24 horas: cuando llega a cero, gana la oferta más alta.',
     live_now: 'subastas en curso ahora', err_bid_step: 'Las pujas suben solo en pasos de $0.50 — usa un monto en esa escala.', err_bid_amount: 'Ingresa un monto de puja válido (ej. 12.50).',
-    main_zone: 'Zona principal — Subastas de 24 horas', flash_zone: 'Zona Flash de 5 minutos', flash_empty: 'No hay subastas flash ahora. El vendedor activará esta zona pronto.',
-    overseas_zone: 'Zona Internacional', overseas_banner: '🌏 Zona Internacional — Envío desde el extranjero · Llega en 10–15 días · Envío consolidado rápido a nuestro almacén de Montebello', overseas_badge: '⏳ Entrega en 10–15 días', overseas_empty: 'No hay subastas internacionales ahora — nuevos artículos en camino.',
+    main_zone: 'Zona principal — Subastas de 24 horas', flash_zone: 'Zona Flash de 5 minutos', flash_empty: 'No hay subastas flash ahora. Las rondas flash aparecen durante el día: vuelve pronto o explora la Zona Local para ver las ofertas que terminan hoy.',
+    overseas_zone: 'Zona Internacional', overseas_banner: '🌏 Zona Internacional — Envío desde el extranjero · Llega a nuestro almacén de Montebello en 10–15 días · Luego recogida gratuita al día siguiente, o entrega en EE. UU. en 3–7 días', overseas_badge: '⏳ Entrega en 10–15 días', overseas_empty: 'No hay subastas internacionales ahora — nuevos artículos en camino.',
+    ending_soon_h: '⏰ Termina pronto — stock local, listo para recoger hoy',
+    arr_est: '🌏 Artículo internacional: llegada estimada a nuestro almacén de Montebello: __D1__ – __D2__ (10–15 días después de ganar). Al llegar: recogida gratuita al día siguiente, o entrega en EE. UU. en 3–7 días.',
     local_banner: '🚚 Zona Local — En stock en nuestro almacén de Montebello · Recogida gratuita en Montebello · Entrega nacional en 3–7 días', local_badge: '🚚 Entrega en 3–7 días',
     sourcing_title: '¿Buscas algo más? ¡Lo conseguimos para ti! 🌏', sourcing_body: '¿Buscas un producto que no está publicado? Dinos qué quieres comprar — ofrecemos servicio de compras en el extranjero. Déjanos un mensaje con el nombre del producto y una foto de la etiqueta de precio si la tienes, y te damos un precio.', sourcing_btn: 'Déjanos un mensaje',
     current_bid: 'Oferta actual', starting_bid: 'Oferta inicial', bids: 'ofertas', bid: 'oferta', retail: 'Precio de lista',
@@ -186,10 +190,20 @@ function toast(msg) {
   clearTimeout(el._t); el._t = setTimeout(() => { el.hidden = true; }, 4200);
 }
 async function api(pathname, opts = {}) {
-  const r = await fetch(pathname, { headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }, ...opts });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(j.error || 'error'), { data: j, status: r.status });
-  return j;
+  const isGet = !opts.method || String(opts.method).toUpperCase() === 'GET';
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetch(pathname, { headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }, ...opts });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(j.error || 'error'), { data: j, status: r.status });
+      return j;
+    } catch (e) {
+      /* One automatic retry for network-level failures on safe GET reads
+         (a cold start can make a first deep-link open fail to fetch). */
+      if (!isGet || e.status || attempt >= 1) throw e;
+      await new Promise((res) => setTimeout(res, 900));
+    }
+  }
 }
 function track(type, lotId) {
   fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, lotId: lotId || null }) }).catch(() => {});
@@ -395,15 +409,15 @@ function lotCard(lot) {
     ${countbar(lot)}
     <div class="body">
       <h3><a href="#/lot/${lot.id}">${esc(lot.title)}</a></h3>
-      <div class="sub">${esc(lot.subtitle)}</div>
       <div class="badges"><span class="chip ship">${t('free_ship')}</span><span class="chip ship">${t('free_pickup')}</span>${lot.zone === 'overseas' ? `<span class="chip overseas">${t('overseas_badge')}</span>` : ''}${lot.zone === 'main' ? `<span class="chip ship">${t('local_badge')}</span>` : ''}${lot.qty_note ? `<span class="chip">${esc(lot.qty_note)}</span>` : ''}</div>
       <div class="price-row"><span class="price">${fmt(lot.current_cents)}</span>${lot.retail_cents ? `<span class="retail">${fmt(lot.retail_cents)}</span>` : ''}</div>
       <div class="meta"><span>${lot.has_bids ? t('current_bid') : t('starting_bid')} · ${lot.bid_count} ${lot.bid_count === 1 ? t('bid') : t('bids')}</span>
       <span class="${ended ? 'ended-tag' : ''}" data-ends="${lot.ends_at}">${ended ? t('ended') : fmtLeft(lot.ends_at - nowMs())}</span></div>
+      <div class="sub">${esc(lot.subtitle)}</div>
       ${ended ? '' : `<form class="qb-form" data-lot="${lot.id}">
-        ${me ? '' : `<input class="q-name" placeholder="${t('name')}" autocomplete="name" required>
-        <input class="q-email" type="email" placeholder="${t('email')}" autocomplete="email" required>`}
-        <div class="bid-row"><input class="q-amount" type="text" inputmode="decimal" data-min-cents="${qbMin}" value="${(qbMin / 100).toFixed(2)}" required>
+        ${me ? '' : `<input class="q-name" placeholder="${t('name')}" aria-label="${t('name')}" autocomplete="name" required>
+        <input class="q-email" type="email" placeholder="${t('email')}" aria-label="${t('email')}" autocomplete="email" required>`}
+        <div class="bid-row"><input class="q-amount" type="text" inputmode="decimal" aria-label="${t('bid_amount')}" data-min-cents="${qbMin}" value="${(qbMin / 100).toFixed(2)}" required>
         <button class="btn" type="submit">${t('place_bid')}</button></div>
         <p class="error qb-err"></p>
       </form>`}
@@ -442,7 +456,10 @@ async function pageHome() {
       ${flash.length ? `<div class="grid">${flash.map(lotCard).join('')}</div>` : `<p class="note">${t('flash_empty')}</p>`}
     </section>`;
   } else {
-    zoneBody = `<div class="cat-row"><button class="btn small ${homeCat === 'all' ? '' : 'secondary'} cat-btn" data-cat="all">${t('cat_all')} (${mainAll.length})</button>${cats.map((c) => `<button class="btn small ${homeCat === c ? '' : 'secondary'} cat-btn" data-cat="${esc(c)}">${esc(c)} (${catCounts[c]})</button>`).join('')}</div>
+    const soon = [...mainAll].filter((l) => l.ends_at > nowMs()).sort((a, b) => a.ends_at - b.ends_at).slice(0, 8);
+    const soonRail = soon.length ? `<h2 class="zone-title soon-h"><span class="dot"></span>${t('ending_soon_h')}</h2>
+    <div class="soon-rail">${soon.map((l) => `<a class="soon-card" href="#/lot/${l.id}"><span class="soon-photo"><img src="${esc(l.images[0] || '')}" alt="${esc(l.title)}" loading="lazy"></span><span class="soon-info"><span class="soon-title">${esc(l.title)}</span><span class="soon-meta"><strong>${fmt(l.current_cents)}</strong><span data-ends="${l.ends_at}">${fmtLeft(l.ends_at - nowMs())}</span></span></span></a>`).join('')}</div>` : '';
+    zoneBody = `${soonRail}<div class="cat-row"><button class="btn small ${homeCat === 'all' ? '' : 'secondary'} cat-btn" data-cat="all">${t('cat_all')} (${mainAll.length})</button>${cats.map((c) => `<button class="btn small ${homeCat === c ? '' : 'secondary'} cat-btn" data-cat="${esc(c)}">${esc(c)} (${catCounts[c]})</button>`).join('')}</div>
     <h2 class="zone-title"><span class="dot"></span>${t('main_zone')}</h2>
     <p class="overseas-banner">${t('local_banner')}</p>
     <p class="note" style="margin-top:-8px">${t('per_lot_time')}</p>
@@ -500,6 +517,9 @@ async function pageLot(id) {
   const me = identity();
   const ended = lot.status === 'ended' || lot.ends_at <= nowMs();
   const minNext = lot.has_bids ? lot.current_cents + 50 : lot.start_cents;
+  const dFmt = (ms) => new Date(ms).toLocaleDateString(lang === 'es' ? 'es-US' : 'en-US', { month: 'short', day: 'numeric' });
+  const arrNote = lot.zone === 'overseas' && !ended
+    ? t('arr_est').replace('__D1__', dFmt(nowMs() + 10 * 864e5)).replace('__D2__', dFmt(nowMs() + 15 * 864e5)) : '';
   let idx = 0;
   app.innerHTML = `
     <p><a href="#/">${t('back')}</a></p>
@@ -527,10 +547,11 @@ async function pageLot(id) {
           ${countbar(lot)}
           <hr class="hr">
           ${ended ? `<p class="ended-tag">${t('ended')}</p>` : `
+          ${arrNote ? `<p class="arrival-note">${arrNote}</p>` : ''}
           <form id="bid-form">
-            <label>${t('name')}</label><input id="b-name" required value="${esc(me ? me.name : '')}" autocomplete="name">
-            <label>${t('email')}</label><input id="b-email" type="email" required value="${esc(me ? me.email : '')}" autocomplete="email">
-            <label>${t('bid_amount')} — ${t('min_next')}: ${fmt(minNext)}</label>
+            <label for="b-name">${t('name')}</label><input id="b-name" required value="${esc(me ? me.name : '')}" autocomplete="name">
+            <label for="b-email">${t('email')}</label><input id="b-email" type="email" required value="${esc(me ? me.email : '')}" autocomplete="email">
+            <label for="b-amount">${t('bid_amount')} — ${t('min_next')}: ${fmt(minNext)}</label>
             <input id="b-amount" type="text" inputmode="decimal" data-min-cents="${minNext}" value="${(minNext / 100).toFixed(2)}" required>
             <p class="note">${t('bid_note')}</p>
             <p class="error" id="bid-err"></p>
@@ -586,9 +607,9 @@ async function pageLot(id) {
 function askFormHtml(lotId) {
   const me = identity();
   return `<form class="ask-form" data-lot="${lotId || ''}">
-    <label>${t('your_name')}</label><input class="a-name" required value="${esc(me ? me.name : '')}">
-    <label>${t('your_email')}</label><input class="a-email" type="email" required value="${esc(me ? me.email : '')}">
-    <label>${t('message')}</label><textarea class="a-body" rows="3" required></textarea>
+    <label for="a-name">${t('your_name')}</label><input id="a-name" class="a-name" required value="${esc(me ? me.name : '')}">
+    <label for="a-email">${t('your_email')}</label><input id="a-email" class="a-email" type="email" required value="${esc(me ? me.email : '')}">
+    <label for="a-body">${t('message')}</label><textarea id="a-body" class="a-body" rows="3" required></textarea>
     <p class="error a-err"></p><p class="success a-ok"></p>
     <button class="btn secondary" type="submit">${lotId ? t('ask') : t('send')}</button>
   </form>`;
@@ -616,7 +637,7 @@ function bindAskForm(lotId, root) {
 async function pageMyBids() {
   const me = identity();
   app.innerHTML = `<h1>${t('mybids_h')}</h1><p class="note">${t('mybids_p')}</p>
-    <form id="mb-form" style="max-width:420px"><label>${t('email')}</label>
+    <form id="mb-form" style="max-width:420px"><label for="mb-email">${t('email')}</label>
     <input id="mb-email" type="email" required value="${esc(me ? me.email : '')}">
     <p class="error" id="mb-err"></p><button class="btn" type="submit">${t('load')}</button></form>
     <div id="mb-out" style="margin-top:20px"></div>`;
@@ -744,13 +765,17 @@ function pageRules() {
     ${en ? `
     <h3>One Seller: Kanstar</h3><p>This is Kanstar's own warehouse auction. Only Kanstar sells here — visitors cannot list items. Every lot is warehouse stock sold as pictured.</p>
     <h3>How bidding works</h3><p>Each main-zone lot runs on its own 24-hour countdown from the time it is listed. Flash-zone lots run 5-minute rounds; a bid in the last 30 seconds extends that round by 30 seconds, and a new round starts automatically when one closes. To bid, leave your name and email so we can notify you if you are outbid, if a lot is ending soon, and if you win. Your contact details are never shown publicly.</p>
-    <h3>Pickup & shipping</h3><p>Winners may pick up FREE at our warehouse: 1065 S Vail Ave, Montebello, CA 90640 — at any winning price. Or choose shipping at checkout: shipping is FREE when the winning bid is $30 or more; below $30 a $5 shipping fee applies. Local delivery is next day; nationwide delivery takes 3–7 days. A phone number is collected at checkout so we can reach you about pickup or delivery.</p>
+    <h3>Pickup & shipping</h3><p>Winners may pick up FREE at our warehouse: 1065 S Vail Ave, Montebello, CA 90640 — at any winning price. The warehouse is open daily 10 AM–8 PM; please message us before you come so your item is ready. Or choose shipping at checkout: shipping is FREE when the winning bid is $30 or more; below $30 a $5 shipping fee applies. For items in stock at the warehouse, local delivery is next day and nationwide delivery takes 3–7 days, counted from checkout. A phone number is collected at checkout so we can reach you about pickup or delivery.</p>
+    <h3>Overseas items — delivery timing</h3><p>Overseas Zone items are not in the warehouse yet. After you win, the item ships from overseas and arrives at our Montebello warehouse in about 10–15 days; each overseas lot page shows the estimated arrival dates next to the bid button. Once it arrives we will email you: you can pick it up free the next day, or have it shipped — nationwide delivery then takes 3–7 days from arrival. The 10–15 days come first; pickup and delivery times count from arrival, not from the day you win.</p>
+    <h3>After you win — checkout & payment</h3><p>When a lot ends, check out from My Bids using the email you bid with, and pay by card through secure Stripe checkout. Please complete checkout promptly — the payment link can expire; if it does, contact us and we will re-issue it. Bids are binding, and items are sold as pictured. If anything is wrong with your item, contact us and we will work with you to make it right.</p>
     <h3>Sales tax</h3><p>California orders are subject to sales tax. If your order is picked up at the warehouse or shipped to a California address, 9.5% sales tax is added to the item price (shipping is not taxed). Orders shipped outside California are not taxed.</p>
     <h3>Questions</h3><p>Use “Ask about this lot” on any lot page or the Contact link in the footer. You will get a receipt code — keep it to read our reply under My Messages.</p>`
     : `
     <h3>Un solo vendedor: Kanstar</h3><p>Esta es la subasta del almacén de Kanstar. Solo Kanstar vende aquí: los visitantes no pueden publicar lotes. Cada lote es inventario del almacén y se vende tal como se muestra en las fotos.</p>
     <h3>Cómo funciona la subasta</h3><p>Cada lote de la zona principal corre con su propia cuenta regresiva de 24 horas desde que se publica. Los lotes de la zona flash corren rondas de 5 minutos; una oferta en los últimos 30 segundos extiende la ronda 30 segundos, y al cerrar una ronda empieza otra automáticamente. Para ofertar, deja tu nombre y correo para poder avisarte si te superan, si un lote está por terminar y si ganas. Tus datos nunca se muestran en público.</p>
-    <h3>Recogida y envío</h3><p>Los ganadores pueden recoger GRATIS en nuestro almacén: 1065 S Vail Ave, Montebello, CA 90640, con cualquier precio ganador. O elige envío al pagar: el envío es GRATIS cuando la oferta ganadora es de $30 o más; por debajo de $30 se aplica un cargo de $5. Entrega local al día siguiente; resto del país en 3–7 días. Al pagar se pide un teléfono para contactarte sobre la recogida o el envío.</p>
+    <h3>Recogida y envío</h3><p>Los ganadores pueden recoger GRATIS en nuestro almacén: 1065 S Vail Ave, Montebello, CA 90640, con cualquier precio ganador. El almacén abre todos los días de 10 AM a 8 PM; escríbenos antes de venir para tener tu artículo listo. O elige envío al pagar: el envío es GRATIS cuando la oferta ganadora es de $30 o más; por debajo de $30 se aplica un cargo de $5. Para artículos en stock en el almacén, la entrega local es al día siguiente y la nacional tarda 3–7 días, contados desde el pago. Al pagar se pide un teléfono para contactarte sobre la recogida o el envío.</p>
+    <h3>Artículos internacionales — tiempos de entrega</h3><p>Los artículos de la Zona Internacional aún no están en el almacén. Al ganar, el artículo se envía desde el extranjero y llega a nuestro almacén de Montebello en unos 10–15 días; cada lote internacional muestra las fechas estimadas de llegada junto al botón de oferta. Al llegar te avisaremos por correo: podrás recogerlo gratis al día siguiente, o pedir envío — la entrega nacional tarda entonces 3–7 días desde la llegada. Primero cuentan los 10–15 días; la recogida y la entrega se cuentan desde la llegada, no desde el día en que ganas.</p>
+    <h3>Después de ganar — pago</h3><p>Al terminar un lote, paga desde Mis ofertas con el correo que usaste para ofertar, con tarjeta mediante el pago seguro de Stripe. Completa el pago pronto: el enlace de pago puede vencer; si vence, contáctanos y te lo reenviamos. Las ofertas son vinculantes y los artículos se venden tal como se muestran en las fotos. Si algo está mal con tu artículo, contáctanos y buscaremos una solución contigo.</p>
     <h3>Impuesto sobre las ventas</h3><p>Los pedidos de California están sujetos a impuesto sobre las ventas. Si recoges en el almacén o el envío va a una dirección de California, se agrega 9.5% de impuesto al precio del artículo (el envío no paga impuesto). Los envíos fuera de California no pagan impuesto.</p>
     <h3>Preguntas</h3><p>Usa «Preguntar por este lote» en cualquier lote o el enlace de contacto en el pie de página. Recibirás un código de recibo: guárdalo para leer nuestra respuesta en Mis mensajes.</p>`}
   </div>`;
@@ -765,7 +790,7 @@ function pageContact() {
 
 function pageMyMessages() {
   app.innerHTML = `<h1>${t('mymsg_h')}</h1><p class="note">${t('mymsg_p')}</p>
-    <form id="mm-form" style="max-width:420px"><label>${t('code')}</label>
+    <form id="mm-form" style="max-width:420px"><label for="mm-code">${t('code')}</label>
     <input id="mm-code" required placeholder="A1B2C3D4E5F6" style="text-transform:uppercase">
     <p class="error" id="mm-err"></p><button class="btn" type="submit">${t('check')}</button></form>
     <div id="mm-out" style="margin-top:18px;max-width:640px"></div>`;
