@@ -44,6 +44,7 @@ const I18N = {
     tax_note: 'California orders are subject to sales tax.',
     pay: 'Payment', pay_paid: 'PAID', pay_pending: 'PENDING', pay_expired: 'EXPIRED', pay_recorded: 'unpaid (recorded)',
     pay_redirecting: 'Taking you to secure card checkout…',
+    pay_30: '⏱ Winners get a payment link by email — once you open it, you have 30 minutes to pay before it expires.',
     pay_unavailable: 'Card payment is unavailable right now — your order was saved (shown in the seller backend) and we will contact you to arrange payment.',
     pay_received_h: 'Payment received — thank you!', pay_received_p: 'Your order is confirmed and paid. We will contact you by phone/email to arrange pickup or delivery.',
     pay_pending_h: 'Payment is still processing', pay_pending_p: 'Stripe has not confirmed your payment yet. Wait a moment and reload this page, or contact us if it does not clear.',
@@ -123,6 +124,7 @@ const I18N = {
     tax_note: 'Los pedidos de California están sujetos a impuesto sobre las ventas.',
     pay: 'Pago', pay_paid: 'PAGADO', pay_pending: 'PENDIENTE', pay_expired: 'EXPIRADO', pay_recorded: 'sin pagar (registrado)',
     pay_redirecting: 'Te llevamos al pago seguro con tarjeta…',
+    pay_30: '⏱ El ganador recibe un enlace de pago por correo: al abrirlo tienes 30 minutos para pagar antes de que venza.',
     pay_unavailable: 'El pago con tarjeta no está disponible ahora; tu pedido quedó guardado y te contactaremos para coordinar el pago.',
     pay_received_h: '¡Pago recibido — gracias!', pay_received_p: 'Tu pedido está confirmado y pagado. Te contactaremos por teléfono/correo para coordinar la recogida o el envío.',
     pay_pending_h: 'El pago aún se está procesando', pay_pending_p: 'Stripe aún no confirma tu pago. Espera un momento y recarga esta página, o contáctanos si no se acredita.',
@@ -562,6 +564,7 @@ async function pageLot(id) {
           <h3 style="margin-top:0">${t('desc')}</h3>
           <p class="note" style="color:var(--text)">${esc(lot.description)}</p>
           <p class="note">${t('ship_note')}<br>${t('tax_note')}</p>
+        <p class="note" style="color:var(--gold);font-weight:700">${t('pay_30')}</p>
         </div>
         <div class="panel" style="margin-top:16px">
           <h3 style="margin-top:0">${t('ask_q')}</h3>
@@ -707,6 +710,7 @@ async function pageCheckout(winId) {
         <div class="kv" id="q-discount-row" hidden><span id="q-discount-label">${t('promo_discount')}</span><span id="q-discount">—</span></div>
         <div class="kv total"><span>${t('total')}</span><span id="q-total">—</span></div>
         <p class="note">${t('ship_note')}<br>${t('tax_note')}</p>
+        <p class="note" style="color:var(--gold);font-weight:700">${t('pay_30')}</p>
         <p class="error" id="co-err"></p><p class="success" id="co-ok"></p>
         <button class="btn" type="submit">${t('place_order')}</button>
       </form>
@@ -767,7 +771,7 @@ function pageRules() {
     <h3>How bidding works</h3><p>Each main-zone lot runs on its own 24-hour countdown from the time it is listed. Flash-zone lots run 5-minute rounds; a bid in the last 30 seconds extends that round by 30 seconds, and a new round starts automatically when one closes. To bid, leave your name and email so we can notify you if you are outbid, if a lot is ending soon, and if you win. Your contact details are never shown publicly.</p>
     <h3>Pickup & shipping</h3><p>Winners may pick up FREE at our warehouse: 1065 S Vail Ave, Montebello, CA 90640 — at any winning price. The warehouse is open daily 10 AM–8 PM; please message us before you come so your item is ready. Or choose shipping at checkout: shipping is FREE when the winning bid is $30 or more; below $30 a $5 shipping fee applies. For items in stock at the warehouse, local delivery is next day and nationwide delivery takes 3–7 days, counted from checkout. A phone number is collected at checkout so we can reach you about pickup or delivery.</p>
     <h3>Overseas items — delivery timing</h3><p>Overseas Zone items are not in the warehouse yet. After you win, the item ships from overseas and arrives at our Montebello warehouse in about 10–15 days; each overseas lot page shows the estimated arrival dates next to the bid button. Once it arrives we will email you: you can pick it up free the next day, or have it shipped — nationwide delivery then takes 3–7 days from arrival. The 10–15 days come first; pickup and delivery times count from arrival, not from the day you win.</p>
-    <h3>After you win — checkout & payment</h3><p>When a lot ends, check out from My Bids using the email you bid with, and pay by card through secure Stripe checkout. Please complete checkout promptly — the payment link can expire; if it does, contact us and we will re-issue it. Bids are binding, and items are sold as pictured. If anything is wrong with your item, contact us and we will work with you to make it right.</p>
+    <h3>After you win — checkout & payment</h3><p>When a lot ends, we email the winner a payment link. Once you open the link, you have 30 minutes to complete payment before it expires — the clock starts at your click, so pay right away. If the link expires, the win may be released and the lot re-offered; contact us right away if you still want the item. You can also check out any time from My Bids using the email you bid with, paying by card through secure Stripe checkout. Bids are binding, and items are sold as pictured. If anything is wrong with your item, contact us and we will work with you to make it right.</p>
     <h3>Sales tax</h3><p>California orders are subject to sales tax. If your order is picked up at the warehouse or shipped to a California address, 9.5% sales tax is added to the item price (shipping is not taxed). Orders shipped outside California are not taxed.</p>
     <h3>Questions</h3><p>Use “Ask about this lot” on any lot page or the Contact link in the footer. You will get a receipt code — keep it to read our reply under My Messages.</p>`
     : `
@@ -775,7 +779,7 @@ function pageRules() {
     <h3>Cómo funciona la subasta</h3><p>Cada lote de la zona principal corre con su propia cuenta regresiva de 24 horas desde que se publica. Los lotes de la zona flash corren rondas de 5 minutos; una oferta en los últimos 30 segundos extiende la ronda 30 segundos, y al cerrar una ronda empieza otra automáticamente. Para ofertar, deja tu nombre y correo para poder avisarte si te superan, si un lote está por terminar y si ganas. Tus datos nunca se muestran en público.</p>
     <h3>Recogida y envío</h3><p>Los ganadores pueden recoger GRATIS en nuestro almacén: 1065 S Vail Ave, Montebello, CA 90640, con cualquier precio ganador. El almacén abre todos los días de 10 AM a 8 PM; escríbenos antes de venir para tener tu artículo listo. O elige envío al pagar: el envío es GRATIS cuando la oferta ganadora es de $30 o más; por debajo de $30 se aplica un cargo de $5. Para artículos en stock en el almacén, la entrega local es al día siguiente y la nacional tarda 3–7 días, contados desde el pago. Al pagar se pide un teléfono para contactarte sobre la recogida o el envío.</p>
     <h3>Artículos internacionales — tiempos de entrega</h3><p>Los artículos de la Zona Internacional aún no están en el almacén. Al ganar, el artículo se envía desde el extranjero y llega a nuestro almacén de Montebello en unos 10–15 días; cada lote internacional muestra las fechas estimadas de llegada junto al botón de oferta. Al llegar te avisaremos por correo: podrás recogerlo gratis al día siguiente, o pedir envío — la entrega nacional tarda entonces 3–7 días desde la llegada. Primero cuentan los 10–15 días; la recogida y la entrega se cuentan desde la llegada, no desde el día en que ganas.</p>
-    <h3>Después de ganar — pago</h3><p>Al terminar un lote, paga desde Mis ofertas con el correo que usaste para ofertar, con tarjeta mediante el pago seguro de Stripe. Completa el pago pronto: el enlace de pago puede vencer; si vence, contáctanos y te lo reenviamos. Las ofertas son vinculantes y los artículos se venden tal como se muestran en las fotos. Si algo está mal con tu artículo, contáctanos y buscaremos una solución contigo.</p>
+    <h3>Después de ganar — pago</h3><p>Al terminar un lote, enviamos al ganador un enlace de pago por correo. Al abrir el enlace tienes 30 minutos para completar el pago antes de que venza: el conteo empieza con tu clic, así que paga de inmediato. Si el enlace vence, el premio puede liberarse y el lote volver a ofrecerse; contáctanos de inmediato si aún quieres el artículo. También puedes pagar cuando quieras desde Mis ofertas con el correo que usaste para ofertar, con tarjeta mediante el pago seguro de Stripe. Las ofertas son vinculantes y los artículos se venden tal como se muestran en las fotos. Si algo está mal con tu artículo, contáctanos y buscaremos una solución contigo.</p>
     <h3>Impuesto sobre las ventas</h3><p>Los pedidos de California están sujetos a impuesto sobre las ventas. Si recoges en el almacén o el envío va a una dirección de California, se agrega 9.5% de impuesto al precio del artículo (el envío no paga impuesto). Los envíos fuera de California no pagan impuesto.</p>
     <h3>Preguntas</h3><p>Usa «Preguntar por este lote» en cualquier lote o el enlace de contacto en el pie de página. Recibirás un código de recibo: guárdalo para leer nuestra respuesta en Mis mensajes.</p>`}
   </div>`;
