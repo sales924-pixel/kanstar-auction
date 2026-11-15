@@ -33,6 +33,14 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const SITE_URL = (process.env.SITE_URL || 'https://kanstarus.com').replace(/\/+$/, '');
 const STRIPE_ENABLED = !!STRIPE_SECRET_KEY;
 
+/* Transactional email via Resend (env-gated): with no RESEND_API_KEY set,
+ * winner notifications stay log-only exactly as before. The winner email
+ * carries the payment link; the 30-minute payment window runs from the
+ * winner's click on that link (seller policy, 2026-11-14). */
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const MAIL_FROM = process.env.MAIL_FROM || 'Kanstar Daily Auction <noreply@kanstarus.com>';
+const MAIL_ENABLED = !!RESEND_API_KEY;
+
 /* Seller passcode: only a scrypt hash lives here (plaintext never stored). */
 const SELLER_SALT = 'f784542145dd6fa23460047f30c63cab';
 const SELLER_HASH = '00be1340b6c3386ae9dff2fb1f5087ceb965e591396529d6ee9110ecc505b12f405b1126a9b6eafe9321385dff8d3f322eba5e4998c986f437185dc58bbc2620';
@@ -118,6 +126,10 @@ ensureColumn('orders', 'stripe_session_id', "TEXT DEFAULT ''");
 ensureColumn('orders', 'paid_at', 'INTEGER');
 ensureColumn('orders', 'promo_code', "TEXT DEFAULT ''");
 ensureColumn('orders', 'discount_cents', 'INTEGER DEFAULT 0');
+ensureColumn('wins', 'pay_token', "TEXT DEFAULT ''");
+ensureColumn('wins', 'pay_click_at', 'INTEGER');
+ensureColumn('wins', 'email_sent_at', 'INTEGER');
+ensureColumn('wins', 'email_attempts', 'INTEGER DEFAULT 0');
 
 /* Promo code: $5 off a first win of $10+, one use per email. A use counts
  * once an order exists with the code, unless that order's payment expired
@@ -215,6 +227,59 @@ function logNotification(kind, toEmail, lotId, body) {
     .run(kind, toEmail, lotId || null, body || '', now());
   console.log(`[notify:${kind}] -> ${toEmail} (lot ${lotId || '-'})`);
 }
+
+/* ------------------------- winner email (Resend) ------------------------ */
+const escHtml = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function sendEmail(to, subject, html, text) {
+  if (!MAIL_ENABLED) return false;
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, html, text }),
+    });
+    if (!r.ok) { console.error(`[mail] send to ${to} failed: HTTP ${r.status} ${(await r.text().catch(() => '')).slice(0, 200)}`); return false; }
+    return true;
+  } catch (e) { console.error(`[mail] send to ${to} error: ${e.message}`); return false; }
+}
+function ensurePayToken(win) {
+  if (win.pay_token) return win.pay_token;
+  const tok = crypto.randomBytes(16).toString('hex');
+  db.prepare('UPDATE wins SET pay_token=? WHERE id=?').run(tok, win.id);
+  return tok;
+}
+const winnerMailInFlight = new Set();
+async function sendWinnerEmail(winId) {
+  if (!MAIL_ENABLED || winnerMailInFlight.has(winId)) return;
+  winnerMailInFlight.add(winId);
+  try {
+    const win = db.prepare('SELECT w.*, l.title AS lot_title, bd.name AS bidder_name, bd.email AS bidder_email FROM wins w JOIN lots l ON l.id=w.lot_id JOIN bidders bd ON bd.id=w.bidder_id WHERE w.id=?').get(winId);
+    if (!win || win.email_sent_at) return;
+    db.prepare('UPDATE wins SET email_attempts=COALESCE(email_attempts,0)+1 WHERE id=?').run(winId);
+    const link = `${SITE_URL}/pay/${win.id}?t=${ensurePayToken(win)}`;
+    const amt = `$${(win.amount_cents / 100).toFixed(2)}`;
+    const title = win.lot_title;
+    const subject = `You won "${title}" — pay within 30 minutes | Kanstar Daily Auction`;
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a">
+      <h2 style="margin:0 0 2px">&#127942; You won!</h2>
+      <p style="margin:0 0 14px;color:#666">Kanstar Daily Auction</p>
+      <p>Hi ${escHtml(win.bidder_name)},</p>
+      <p>You won <strong>&quot;${escHtml(title)}&quot;</strong> for <strong>${amt}</strong>.</p>
+      <p><strong>&#9201; Pay within 30 minutes:</strong> your payment window starts when you open the payment link below. After 30 minutes the link expires and the win may be released to the next buyer.</p>
+      <p style="text-align:center;margin:22px 0"><a href="${link}" style="background:#f5b921;color:#111;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px">Pay now / Pagar ahora</a></p>
+      <p>After paying: free pickup at our warehouse — ${WAREHOUSE} (open daily 10 AM&ndash;8 PM; please message us before you come). Prefer shipping? Orders of $30+ ship free; under $30 add $5.</p>
+      <hr style="border:none;border-top:1px solid #ddd;margin:18px 0">
+      <p style="color:#444">&#127466;&#127480; Ganaste <strong>&quot;${escHtml(title)}&quot;</strong> por <strong>${amt}</strong>. Tienes 30 minutos desde que abres el enlace de pago para completar el pago; despu&eacute;s el enlace vence y el premio puede liberarse. Recogida gratis en nuestro almac&eacute;n: ${WAREHOUSE} (todos los d&iacute;as 10 AM&ndash;8 PM; av&iacute;sanos antes de venir). Env&iacute;o: gratis en pedidos de $30+, si no, +$5.</p>
+      <p style="color:#888;font-size:12px">Questions? Message us from kanstarus.com. / &iquest;Preguntas? Escr&iacute;benos desde kanstarus.com.</p>
+    </div>`;
+    const text = `You won! (Kanstar Daily Auction)\n\nHi ${win.bidder_name},\nYou won "${title}" for ${amt}.\n\nPay within 30 minutes: your payment window starts when you open this link; after 30 minutes it expires and the win may be released.\n${link}\n\nAfter paying: free pickup at our warehouse — ${WAREHOUSE} (open daily 10 AM-8 PM; message us before you come). Shipping: orders $30+ ship free, under $30 add $5.\n\n---\nGanaste "${title}" por ${amt}. Tienes 30 minutos desde que abres el enlace para pagar; despues vence y el premio puede liberarse. Recogida gratis: ${WAREHOUSE} (10 AM-8 PM; avisanos antes de venir). Envio gratis en pedidos de $30+, si no +$5.`;
+    const ok = await sendEmail(win.bidder_email, subject, html, text);
+    if (ok) {
+      db.prepare('UPDATE wins SET email_sent_at=? WHERE id=?').run(now(), winId);
+      console.log(`[mail] winner email sent for win ${winId} -> ${win.bidder_email}`);
+    }
+  } finally { winnerMailInFlight.delete(winId); }
+}
 function getBidderByEmail(email) {
   return db.prepare('SELECT * FROM bidders WHERE email=?').get(email);
 }
@@ -259,9 +324,13 @@ function finalizeLot(lot) {
   if (lot.status !== 'active') return; // removed lots never finalize/reopen
   const top = topBid(lot.id, lot.round);
   if (top) {
-    db.prepare('INSERT OR IGNORE INTO wins(lot_id,round,bidder_id,amount_cents,created_at) VALUES(?,?,?,?,?)')
+    const ins = db.prepare('INSERT OR IGNORE INTO wins(lot_id,round,bidder_id,amount_cents,created_at) VALUES(?,?,?,?,?)')
       .run(lot.id, lot.round, top.bidder_id, top.amount_cents, now());
     logNotification('winner', top.bidder_email, lot.id, `You won "${lot.title}" for $${(top.amount_cents / 100).toFixed(2)}.`);
+    if (ins.changes > 0) {
+      const win = db.prepare('SELECT id FROM wins WHERE lot_id=? AND round=?').get(lot.id, lot.round);
+      if (win) sendWinnerEmail(win.id).catch((e) => console.error('[mail] winner email error:', e.message));
+    }
   }
   if (lot.zone === 'flash') {
     // close the round and automatically open a fresh 5-minute round
@@ -305,6 +374,13 @@ function lifecycleSweep() {
       db.prepare("UPDATE lots SET round=round+1, created_at=?, ends_at=?, status='active' WHERE id=?")
         .run(t, t + lot.duration_ms, lot.id);
     }
+  }
+  // Winner-email retry: a winner email that failed to send is retried for
+  // up to 3 attempts, but only for wins from the last 2 hours — wins older
+  // than that predate the mailer and are never emailed.
+  if (MAIL_ENABLED) {
+    const unsent = db.prepare('SELECT id FROM wins WHERE email_sent_at IS NULL AND COALESCE(email_attempts,0) < 3 AND created_at > ? ORDER BY created_at ASC LIMIT 5').all(t - 2 * 3600 * 1000);
+    for (const w of unsent) sendWinnerEmail(w.id).catch((e) => console.error('[mail] retry error:', e.message));
   }
 }
 setInterval(lifecycleSweep, 30000).unref();
@@ -444,6 +520,23 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
   try {
+    /* Winner payment link (sent in the winner email): stamps the click —
+     * the 30-minute payment window runs from this moment — sets a cookie
+     * the checkout page reads for its countdown, then lands the winner on
+     * their checkout page. Bad or missing token -> home page. */
+    if (p.startsWith('/pay/') && req.method === 'GET') {
+      const id = Number(p.split('/')[2]);
+      const win = db.prepare('SELECT * FROM wins WHERE id=?').get(id);
+      const tok = url.searchParams.get('t') || '';
+      if (win && win.pay_token && tok && tok === win.pay_token) {
+        if (!win.pay_click_at) db.prepare('UPDATE wins SET pay_click_at=? WHERE id=?').run(now(), id);
+        const clickAt = win.pay_click_at || now();
+        res.writeHead(302, { Location: `${SITE_URL}/#/checkout/${id}`, 'Set-Cookie': `payclick_${id}=${clickAt}; Path=/; Max-Age=3600; SameSite=Lax` });
+        return res.end();
+      }
+      res.writeHead(302, { Location: `${SITE_URL}/` });
+      return res.end();
+    }
     /* ------------------------------ API ------------------------------ */
     if (p === '/api/lots' && req.method === 'GET') {
       lifecycleSweep();
@@ -658,6 +751,16 @@ const server = http.createServer(async (req, res) => {
     }
     if (p.startsWith('/api/seller/')) {
       if (!sellerAuth(req)) return sendJson(res, 401, { error: 'unauthorized' }); // wrong passcode -> nothing
+      if (p === '/api/seller/test-email' && req.method === 'POST') {
+        const body = await readBody(req);
+        const to = String(body.to || '').trim();
+        if (!validEmail(to)) return sendJson(res, 400, { error: 'invalid_email' });
+        if (!MAIL_ENABLED) return sendJson(res, 400, { error: 'mail_not_configured' });
+        const ok = await sendEmail(to, 'Kanstar Daily Auction — email test',
+          '<p>This is a test email from kanstarus.com. Winner notifications are working.</p><p>Esto es un correo de prueba de kanstarus.com. Las notificaciones para ganadores funcionan.</p>',
+          'Test email from kanstarus.com — winner notifications are working.');
+        return sendJson(res, ok ? 200 : 502, { ok });
+      }
       if (p === '/api/seller/lots' && req.method === 'POST') {
         const body = await readBody(req);
         const title = String(body.title || '').trim();
