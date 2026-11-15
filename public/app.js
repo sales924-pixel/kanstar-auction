@@ -45,6 +45,7 @@ const I18N = {
     pay: 'Payment', pay_paid: 'PAID', pay_pending: 'PENDING', pay_expired: 'EXPIRED', pay_recorded: 'unpaid (recorded)',
     pay_redirecting: 'Taking you to secure card checkout…',
     pay_30: '⏱ Winners get a payment link by email — once you open it, you have 30 minutes to pay before it expires.',
+    pay_count: '⏱ Time left to pay: __T__ — after that, this win may be released.',
     pay_unavailable: 'Card payment is unavailable right now — your order was saved (shown in the seller backend) and we will contact you to arrange payment.',
     pay_received_h: 'Payment received — thank you!', pay_received_p: 'Your order is confirmed and paid. We will contact you by phone/email to arrange pickup or delivery.',
     pay_pending_h: 'Payment is still processing', pay_pending_p: 'Stripe has not confirmed your payment yet. Wait a moment and reload this page, or contact us if it does not clear.',
@@ -125,6 +126,7 @@ const I18N = {
     pay: 'Pago', pay_paid: 'PAGADO', pay_pending: 'PENDIENTE', pay_expired: 'EXPIRADO', pay_recorded: 'sin pagar (registrado)',
     pay_redirecting: 'Te llevamos al pago seguro con tarjeta…',
     pay_30: '⏱ El ganador recibe un enlace de pago por correo: al abrirlo tienes 30 minutos para pagar antes de que venza.',
+    pay_count: '⏱ Tiempo restante para pagar: __T__; después, este premio puede liberarse.',
     pay_unavailable: 'El pago con tarjeta no está disponible ahora; tu pedido quedó guardado y te contactaremos para coordinar el pago.',
     pay_received_h: '¡Pago recibido — gracias!', pay_received_p: 'Tu pedido está confirmado y pagado. Te contactaremos por teléfono/correo para coordinar la recogida o el envío.',
     pay_pending_h: 'El pago aún se está procesando', pay_pending_p: 'Stripe aún no confirma tu pago. Espera un momento y recarga esta página, o contáctanos si no se acredita.',
@@ -711,10 +713,30 @@ async function pageCheckout(winId) {
         <div class="kv total"><span>${t('total')}</span><span id="q-total">—</span></div>
         <p class="note">${t('ship_note')}<br>${t('tax_note')}</p>
         <p class="note" style="color:var(--gold);font-weight:700">${t('pay_30')}</p>
+        <p class="note" id="co-count" style="color:var(--gold);font-weight:700;font-size:1.05rem" hidden></p>
         <p class="error" id="co-err"></p><p class="success" id="co-ok"></p>
         <button class="btn" type="submit">${t('place_order')}</button>
       </form>
     </div>`;
+  /* Payment-window countdown: present only when the winner arrived via
+   * the emailed payment link (the server stamped the click and set the
+   * payclick cookie). Display-only; checkout is never blocked. */
+  const ckMatch = document.cookie.match(new RegExp(`(?:^|; )payclick_${winId}=(\\d+)`));
+  if (ckMatch) {
+    const deadline = Number(ckMatch[1]) + 30 * 60 * 1000;
+    const countEl = $('#co-count');
+    if (countEl) {
+      countEl.hidden = false;
+      const tickCount = () => {
+        const left = deadline - Date.now();
+        if (left <= 0) { countEl.textContent = t('pay_30'); return; }
+        const s = Math.ceil(left / 1000);
+        countEl.textContent = t('pay_count').replace('__T__', `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
+        setTimeout(tickCount, 1000);
+      };
+      tickCount();
+    }
+  }
   const quote = async () => {
     const method = $('#co-method').value;
     $('#co-ship-fields').hidden = method !== 'ship';
