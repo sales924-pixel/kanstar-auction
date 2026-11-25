@@ -665,7 +665,8 @@ async function pageLot(id) {
           ${askFormHtml(lot.id)}
         </div>
       </div>
-    </div>`;
+    </div>
+    ${ended ? '' : `<div class="lot-stickybar"><div class="lsb-info"><strong>${fmt(lot.current_cents)}</strong><span data-ends="${lot.ends_at}">${fmtLeft(lot.ends_at - nowMs())}</span></div><button class="btn" id="lsb-bid" type="button">${t('place_bid')}</button></div><div class="lot-stickybar-spacer"></div>`}`;
   track('lot', lot.id);
   const setIdx = (i) => {
     idx = (i + lot.images.length) % lot.images.length;
@@ -679,6 +680,8 @@ async function pageLot(id) {
     $$('.thumbs button').forEach((b) => b.addEventListener('click', () => setIdx(Number(b.dataset.i))));
   }
   bindAskForm(lot.id);
+  const lsb = $('#lsb-bid');
+  if (lsb) lsb.addEventListener('click', () => { const f = $('#bid-form'); if (f) f.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
   const form = $('#bid-form');
   if (form) form.addEventListener('submit', async (e) => {
     e.preventDefault();

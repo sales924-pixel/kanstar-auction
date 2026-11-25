@@ -42,13 +42,32 @@ label{font-size:.86rem;color:var(--muted);display:block;margin:10px 0 4px}
   .zone-tabs-inner{padding:8px 10px;gap:6px}
   .ztab{font-size:.78rem;padding:9px 4px;gap:5px;border-radius:18px}
   .ztab-label{white-space:normal;text-align:center;line-height:1.15}
-  .ztab-count{font-size:.68rem;padding:1px 6px}
+  .ztab-count{font-size:.75rem;padding:1px 6px}
 }
 /* very narrow phones: stack tab label over its count so words like
    "Overseas" are never truncated */
 @media(max-width:360px){
   .ztab{flex-direction:column;gap:2px;font-size:.74rem;padding:8px 2px}
-  .ztab-count{font-size:.62rem;padding:0 5px}
+  .ztab-count{font-size:.7rem;padding:0 5px}
+}
+/* phones: slim non-sticky header (brand + language share the first row, nav
+   gets its own roomier row); only the zone tabs stay stuck to the top */
+@media(max-width:760px){
+  .site-header{position:static;gap:8px 14px;padding:10px 14px}
+  .brand-mark{font-size:1.2rem}
+  .brand-sub{font-size:.62rem;margin-top:3px}
+  .main-nav{order:3;width:100%;margin-left:0;gap:6px;overflow-x:auto;scrollbar-width:none}
+  .main-nav::-webkit-scrollbar{display:none}
+  .main-nav a{padding:9px 8px;white-space:nowrap;font-size:.95rem}
+  .lang-toggle{margin-left:auto}
+  .lang-toggle button{padding:8px 12px}
+  .zone-tabs{top:0}
+  .bids-fab,.bids-pop{display:none}
+  .soon-rail,.cat-row{scrollbar-width:none}
+  .soon-rail::-webkit-scrollbar,.cat-row::-webkit-scrollbar{display:none}
+  .thumbs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+  .thumbs::-webkit-scrollbar{display:none}
+  .thumbs button{width:52px;height:52px;flex:none}
 }
 
 /* layout */
@@ -81,6 +100,7 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 @media(max-width:1020px){.grid{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:760px){.grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:560px){.grid{grid-template-columns:repeat(2,1fr);gap:10px}.card .body{padding:9px 10px 11px;gap:5px}.card h3{font-size:.85rem}.card .sub{font-size:.72rem}.card .price{font-size:1.05rem}.card .retail{font-size:.72rem}.card .meta{font-size:.7rem}.qb-form{margin-top:7px;gap:6px}.qb-form .bid-row{gap:6px}.qb-form .bid-row .btn{padding-left:8px;padding-right:8px;font-size:.85rem}}
+@media(max-width:560px){.card .meta{flex-direction:column;align-items:flex-start;gap:1px;font-size:.74rem}.card .meta [data-ends]{white-space:nowrap}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column}
 .card .photo{background:#efe9e2;aspect-ratio:1/1;position:relative;overflow:hidden;display:block}
 .card .photo img{position:absolute;inset:10px;width:calc(100% - 20px);height:calc(100% - 20px);object-fit:contain;display:block;background:#fff;border-radius:10px}
@@ -103,7 +123,7 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 #bid-form #b-amount{font-size:16px;text-align:left;letter-spacing:0}
 @media(max-width:560px){.qb-form .bid-row{gap:6px}.qb-form .bid-row input{padding-left:6px;padding-right:6px}}
 @media(max-width:400px){.qb-form .bid-row .btn{font-size:.85rem}.qb-form .bid-row input{padding-left:6px;padding-right:6px}}
-.chip{background:#171210;border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:2px 9px;font-size:.72rem}
+.chip{background:#171210;border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:2px 9px;font-size:.75rem}
 .chip.ship{background:#3a1503;color:var(--gold);border-color:#6b2d08;font-weight:700}
 .chip.overseas{background:#123243;color:#9fd8e8;border-color:#1f6f8b;font-weight:700}
 /* countdown bar */
@@ -131,6 +151,17 @@ main{max-width:1280px;margin:0 auto;padding:22px 18px 40px;min-height:60vh}
 .thumbs button{width:70px;height:70px;padding:0;border:2px solid var(--line);border-radius:10px;background:#fff;overflow:hidden}
 .thumbs button.on{border-color:var(--accent)}
 .thumbs img{width:100%;height:100%;object-fit:contain;display:block}
+/* lot page sticky bid bar (phones only; CSS enables it under 760px) */
+.lot-stickybar{display:none}
+.lot-stickybar-spacer{display:none}
+@media(max-width:760px){
+  .lot-stickybar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:97;background:#100c0a;border-top:2px solid var(--accent2);padding:10px 14px calc(10px + env(safe-area-inset-bottom));align-items:center;gap:12px}
+  .lot-stickybar .lsb-info{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+  .lot-stickybar .lsb-info strong{font-size:1.15rem;color:#fff}
+  .lot-stickybar .lsb-info span{color:var(--muted);font-size:.8rem;white-space:nowrap}
+  .lot-stickybar .btn{margin-left:auto;width:auto;padding:12px 20px;flex:none}
+  .lot-stickybar-spacer{display:block;height:78px}
+}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
 .panel h1{margin:0 0 6px;font-size:1.4rem;line-height:1.25}
 .panel .sub{color:var(--muted);margin:0 0 12px}
