@@ -985,6 +985,40 @@ const server = http.createServer(async (req, res) => {
     }
     if (p.startsWith('/api/')) return sendJson(res, 404, { error: 'not_found' });
 
+    /* Clean lot URLs (/lot/123): social shares and ads link here. Serve the
+       SPA with per-lot Open Graph tags injected so FB/WhatsApp/X render a
+       real preview card (title, current bid, photo). The client router
+       translates the path into its hash route on load. */
+    const lotPath = p.match(/^\/lot\/(\d+)\/?$/);
+    if (lotPath && req.method === 'GET') {
+      const row = db.prepare('SELECT * FROM lots WHERE id=?').get(Number(lotPath[1]));
+      let html = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
+      if (row && row.status !== 'removed' && row.status !== 'cancelled') {
+        const lot = publicLot(row);
+        const price = '$' + (lot.current_cents / 100).toFixed(2);
+        const title = `${lot.title} · Kanstar Daily Auction`;
+        const desc = `${lot.has_bids ? 'Current bid' : 'Starting bid'} ${price}${lot.retail_cents ? ` (retail $${(lot.retail_cents / 100).toFixed(2)})` : ''} — bid before the countdown ends. Free pickup in Montebello, CA; free shipping on wins of $30+.`;
+        const imgPath = (lot.images && lot.images[0]) || '/logo.png';
+        const imgUrl = imgPath.startsWith('http') ? imgPath : SITE_URL + imgPath;
+        const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        const tags = `<meta name="description" content="${escAttr(desc)}">
+<meta property="og:type" content="product">
+<meta property="og:site_name" content="Kanstar Daily Auction">
+<meta property="og:title" content="${escAttr(title)}">
+<meta property="og:description" content="${escAttr(desc)}">
+<meta property="og:url" content="${SITE_URL}/lot/${lot.id}">
+<meta property="og:image" content="${escAttr(imgUrl)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${escAttr(title)}">
+<meta name="twitter:description" content="${escAttr(desc)}">
+<meta name="twitter:image" content="${escAttr(imgUrl)}">`;
+        html = html.replace('<title>Kanstar Daily Auction</title>', `<title>${escAttr(title)}</title>`)
+          .replace(/<!--OG-DEFAULT-START-->[\s\S]*?<!--OG-DEFAULT-END-->/, tags);
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+      return res.end(html);
+    }
+
     /* ---------------------------- static ----------------------------- */
     if (p.startsWith('/uploads/')) { // seller uploads are served from the data disk
       const up = path.normalize(path.join(UPLOADS_DIR, p.slice('/uploads/'.length)));
