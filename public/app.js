@@ -70,6 +70,7 @@ const I18N = {
     mg_all: 'All', mg_local: 'Local', mg_overseas: 'Overseas', mg_flash: 'Flash',
     mg_active: 'Active', mg_ended: 'Ended', mg_cancelled: 'Cancelled', mg_sold: 'Sold (won)',
     mg_search_ph: 'Search title or #id…', mg_more: 'Show more', mg_none: 'No lots match — try a different filter.', mg_showing: 'Showing',
+    first_bid: 'Be the first to bid', s_ending: 'Ending soonest', s_pasc: 'Price: low to high', s_pdesc: 'Price: high to low', s_bids: 'Most bids', no_results: 'No lots match your search.',
     t_today: 'Visitors today', t_total: 'Total visitors', t_pages: 'Page views', t_lots: 'Lot views', t_bids: 'Bids',
     t_visitors: 'Visitors', t_unique_note: 'Unique counts — repeat visits from the same visitor count once.',
     r_today: 'Today', r_yday: 'Yesterday', r_3d: '3 days', r_7d: '7 days', r_30d: '30 days', cat_all: 'All',
@@ -151,6 +152,7 @@ const I18N = {
     mg_all: 'Todos', mg_local: 'Local', mg_overseas: 'Internacional', mg_flash: 'Relámpago',
     mg_active: 'Activos', mg_ended: 'Terminados', mg_cancelled: 'Cancelados', mg_sold: 'Vendidos',
     mg_search_ph: 'Buscar título o #id…', mg_more: 'Mostrar más', mg_none: 'Ningún lote coincide — prueba con otro filtro.', mg_showing: 'Mostrando',
+    first_bid: 'Sé el primero en ofertar', s_ending: 'Terminan primero', s_pasc: 'Precio: de menor a mayor', s_pdesc: 'Precio: de mayor a menor', s_bids: 'Más ofertas', no_results: 'Ningún lote coincide con tu búsqueda.',
     t_today: 'Visitantes hoy', t_total: 'Visitantes totales', t_pages: 'Vistas de página', t_lots: 'Vistas de lotes', t_bids: 'Pujas',
     t_visitors: 'Visitantes', t_unique_note: 'Conteo único — las visitas repetidas del mismo visitante cuentan una sola vez.',
     r_today: 'Hoy', r_yday: 'Ayer', r_3d: '3 días', r_7d: '7 días', r_30d: '30 días', cat_all: 'Todo',
@@ -170,6 +172,12 @@ let trafficRange = 'today';
 let bidRange = 'today';
 let homeCat = 'all';
 let homeCatOverseas = 'all';
+let homeQuery = '';
+let homeSort = 'ending';
+let homeLimit = 60;
+let homeLimitOverseas = 60;
+let homeLotsCache = null;
+let lastHomeSig = '';
 let mgZone = 'all';
 let mgStatus = 'active';
 let mgQuery = '';
@@ -413,9 +421,9 @@ function lotCard(lot) {
     ${countbar(lot)}
     <div class="body">
       <h3><a href="#/lot/${lot.id}">${esc(lot.title)}</a></h3>
-      <div class="badges"><span class="chip ship">${t('free_ship')}</span><span class="chip ship">${t('free_pickup')}</span>${lot.zone === 'overseas' ? `<span class="chip overseas">${t('overseas_badge')}</span>` : ''}${lot.zone === 'main' ? `<span class="chip ship">${t('local_badge')}</span>` : ''}${lot.qty_note ? `<span class="chip">${esc(lot.qty_note)}</span>` : ''}</div>
+      ${(lot.zone === 'overseas' || lot.qty_note) ? `<div class="badges">${lot.zone === 'overseas' ? `<span class="chip overseas">${t('overseas_badge')}</span>` : ''}${lot.qty_note ? `<span class="chip">${esc(lot.qty_note)}</span>` : ''}</div>` : ''}
       <div class="price-row"><span class="price">${fmt(lot.current_cents)}</span>${lot.retail_cents ? `<span class="retail">${fmt(lot.retail_cents)}</span>` : ''}</div>
-      <div class="meta"><span>${lot.has_bids ? t('current_bid') : t('starting_bid')} · ${lot.bid_count} ${lot.bid_count === 1 ? t('bid') : t('bids')}</span>
+      <div class="meta"><span>${lot.bid_count > 0 ? `${t('current_bid')} · ${lot.bid_count >= 3 ? '🔥 ' : ''}${lot.bid_count} ${lot.bid_count === 1 ? t('bid') : t('bids')}` : `${t('starting_bid')} · ${t('first_bid')}`}</span>
       <span class="${ended ? 'ended-tag' : ''}" data-ends="${lot.ends_at}">${ended ? t('ended') : fmtLeft(lot.ends_at - nowMs())}</span></div>
       <div class="sub">${esc(lot.subtitle)}</div>
       ${ended ? '' : `<form class="qb-form" data-lot="${lot.id}">
@@ -428,52 +436,45 @@ function lotCard(lot) {
     </div></article>`;
 }
 
-async function pageHome() {
-  app.innerHTML = `<div class="hero"><h1>${t('hero_h')}</h1><p>${t('hero_p')}</p></div><p class="note">${t('loading')}</p>`;
-  const data = await api('/api/lots');
-  serverOffset = data.now - Date.now();
-  const mainAll = data.lots.filter((l) => l.zone === 'main' && l.status === 'active');
-  const overseas = data.lots.filter((l) => l.zone === 'overseas' && l.status === 'active');
-  const flash = data.lots.filter((l) => l.zone === 'flash' && l.status === 'active');
-  const catCounts = {};
-  for (const l of mainAll) { const c = l.category || 'Other'; catCounts[c] = (catCounts[c] || 0) + 1; }
-  const cats = Object.keys(catCounts).sort((a, b) => catCounts[b] - catCounts[a] || a.localeCompare(b));
-  if (homeCat !== 'all' && !catCounts[homeCat]) homeCat = 'all';
-  const main = homeCat === 'all' ? mainAll : mainAll.filter((l) => (l.category || 'Other') === homeCat);
-  const ocatCounts = {};
-  for (const l of overseas) { const c = l.category || 'Other'; ocatCounts[c] = (ocatCounts[c] || 0) + 1; }
-  const ocats = Object.keys(ocatCounts).sort((a, b) => ocatCounts[b] - ocatCounts[a] || a.localeCompare(b));
-  if (homeCatOverseas !== 'all' && !ocatCounts[homeCatOverseas]) homeCatOverseas = 'all';
-  const overseasShown = homeCatOverseas === 'all' ? overseas : overseas.filter((l) => (l.category || 'Other') === homeCatOverseas);
-  let zoneBody;
-  if (homeZone === 'overseas') {
-    zoneBody = `<section class="overseas-zone solo">
-      <h2 class="zone-title"><span class="overseas-badge">OVERSEAS</span>${t('overseas_zone')}</h2>
-      <p class="overseas-banner">${t('overseas_banner')}</p>
-      <div class="sourcing-banner"><h3>${t('sourcing_title')}</h3><p>${t('sourcing_body')}</p><a class="btn small" href="#/contact">${t('sourcing_btn')}</a></div>
-      ${overseas.length ? `<div class="cat-row"><button class="btn small ${homeCatOverseas === 'all' ? '' : 'secondary'} ocat-btn" data-ocat="all">${t('cat_all')} (${overseas.length})</button>${ocats.map((c) => `<button class="btn small ${homeCatOverseas === c ? '' : 'secondary'} ocat-btn" data-ocat="${esc(c)}">${esc(c)} (${ocatCounts[c]})</button>`).join('')}</div>
-      <div class="grid">${overseasShown.map(lotCard).join('')}</div>` : `<p class="note">${t('overseas_empty')}</p>`}
-    </section>`;
-  } else if (homeZone === 'flash') {
-    zoneBody = `<section class="flash-zone solo">
-      <h2 class="zone-title"><span class="flash-badge">FLASH</span>${t('flash_zone')}</h2>
-      ${flash.length ? `<div class="grid">${flash.map(lotCard).join('')}</div>` : `<p class="note">${t('flash_empty')}</p><p><a class="btn small" href="#local">${t('view_local')}</a></p>`}
-    </section>`;
-  } else {
-    const soon = [...mainAll].filter((l) => l.ends_at > nowMs()).sort((a, b) => a.ends_at - b.ends_at).slice(0, 8);
-    const soonRail = soon.length ? `<h2 class="zone-title soon-h"><span class="dot"></span>${t('ending_soon_h')}</h2>
-    <div class="soon-rail">${soon.map((l) => `<a class="soon-card" href="#/lot/${l.id}"><span class="soon-photo"><img src="${esc(l.images[0] || '')}" alt="${esc(l.title)}" loading="lazy"></span><span class="soon-info"><span class="soon-title">${esc(l.title)}</span><span class="soon-meta"><strong>${fmt(l.current_cents)}</strong><span data-ends="${l.ends_at}">${fmtLeft(l.ends_at - nowMs())}</span></span></span></a>`).join('')}</div>` : '';
-    zoneBody = `${soonRail}<div class="cat-row"><button class="btn small ${homeCat === 'all' ? '' : 'secondary'} cat-btn" data-cat="all">${t('cat_all')} (${mainAll.length})</button>${cats.map((c) => `<button class="btn small ${homeCat === c ? '' : 'secondary'} cat-btn" data-cat="${esc(c)}">${esc(c)} (${catCounts[c]})</button>`).join('')}</div>
-    <h2 class="zone-title"><span class="dot"></span>${t('main_zone')}</h2>
-    <p class="overseas-banner">${t('local_banner')}</p>
-    <p class="note" style="margin-top:-8px">${t('per_lot_time')}</p>
-    <div class="grid">${main.map(lotCard).join('')}</div>`;
-  }
-  app.innerHTML = `
-    <div class="hero"><h1>${t('hero_h')}</h1><p>${t('hero_p')}</p><p class="hero-stat"><span class="live-dot"></span><strong>${mainAll.length + overseas.length + flash.length}</strong>&nbsp;${t('live_now')}</p></div>
-    ${zoneBody}`;
-  paintZoneTabs({ local: mainAll.length, overseas: overseas.length, flash: flash.length });
-  $$('.qb-form').forEach((f) => f.addEventListener('submit', async (e) => {
+/* Home toolbar (search/sort) + capped grids. Grid-only re-renders keep the
+   search input focused while typing; full pageHome() runs on navigation,
+   category clicks and silent data refreshes. */
+function lotsSig(lots) {
+  return lots.map((l) => `${l.id}:${l.status}:${l.ends_at}:${l.current_cents}:${l.bid_count}:${l.round}`).join('|');
+}
+function homeFilterSort(list) {
+  let out = list;
+  const q = homeQuery.trim().toLowerCase();
+  if (q) out = out.filter((l) => l.title.toLowerCase().includes(q) || String(l.id) === q.replace(/^#/, ''));
+  out = [...out];
+  if (homeSort === 'price_asc') out.sort((a, b) => a.current_cents - b.current_cents);
+  else if (homeSort === 'price_desc') out.sort((a, b) => b.current_cents - a.current_cents);
+  else if (homeSort === 'bids') out.sort((a, b) => b.bid_count - a.bid_count || a.ends_at - b.ends_at);
+  else out.sort((a, b) => a.ends_at - b.ends_at);
+  return out;
+}
+function homeToolbarHtml() {
+  return `<div class="home-tools">
+    <input id="home-search" type="search" placeholder="${t('mg_search_ph')}" value="${esc(homeQuery)}" aria-label="Search lots">
+    <select id="home-sort" aria-label="Sort lots">
+      <option value="ending" ${homeSort === 'ending' ? 'selected' : ''}>${t('s_ending')}</option>
+      <option value="price_asc" ${homeSort === 'price_asc' ? 'selected' : ''}>${t('s_pasc')}</option>
+      <option value="price_desc" ${homeSort === 'price_desc' ? 'selected' : ''}>${t('s_pdesc')}</option>
+      <option value="bids" ${homeSort === 'bids' ? 'selected' : ''}>${t('s_bids')}</option>
+    </select>
+  </div>`;
+}
+function homeGridHtml(list, limit) {
+  if (!list.length) return `<p class="note">${t('no_results')}</p>`;
+  return list.slice(0, limit).map(lotCard).join('');
+}
+function homeMoreHtml(total, limit, which) {
+  if (!total) return '';
+  if (total <= limit) return `<p class="note home-count">${t('mg_showing')} ${total} / ${total}</p>`;
+  return `<div class="home-more"><button class="btn secondary" data-more="${which}" type="button">${t('mg_more')}</button><p class="note home-count">${t('mg_showing')} ${limit} / ${total}</p></div>`;
+}
+function bindQbForms(root) {
+  $$('.qb-form', root).forEach((f) => f.addEventListener('submit', async (e) => {
     e.preventDefault();
     const err = f.querySelector('.qb-err');
     err.textContent = '';
@@ -498,6 +499,96 @@ async function pageHome() {
         : err2.data && err2.data.error === 'bid_step' ? t('err_bid_step') : ((err2.data && err2.data.error) || 'Error');
     }
   }));
+}
+function bindMoreButtons() {
+  $$('[data-more]').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.more === 'local') homeLimit += 60; else homeLimitOverseas += 60;
+    refreshHomeGrids();
+  }));
+}
+function refreshHomeGrids() {
+  if (!homeLotsCache) return;
+  const gLocal = $('#home-grid');
+  if (gLocal) {
+    const mainAll = homeLotsCache.filter((l) => l.zone === 'main' && l.status === 'active');
+    const base = homeCat === 'all' ? mainAll : mainAll.filter((l) => (l.category || 'Other') === homeCat);
+    const list = homeFilterSort(base);
+    gLocal.innerHTML = homeGridHtml(list, homeLimit);
+    const mw = $('#home-more-wrap'); if (mw) mw.innerHTML = homeMoreHtml(list.length, homeLimit, 'local');
+    bindQbForms(gLocal);
+    bindMoreButtons();
+  }
+  const gOver = $('#home-grid-overseas');
+  if (gOver) {
+    const overseas = homeLotsCache.filter((l) => l.zone === 'overseas' && l.status === 'active');
+    const base = homeCatOverseas === 'all' ? overseas : overseas.filter((l) => (l.category || 'Other') === homeCatOverseas);
+    const list = homeFilterSort(base);
+    gOver.innerHTML = homeGridHtml(list, homeLimitOverseas);
+    const mw = $('#home-more-wrap'); if (mw) mw.innerHTML = homeMoreHtml(list.length, homeLimitOverseas, 'overseas');
+    bindQbForms(gOver);
+    bindMoreButtons();
+  }
+}
+
+async function pageHome(fromCache) {
+  document.title = 'Kanstar Daily Auction';
+  let data;
+  if (fromCache && homeLotsCache) {
+    data = { now: Date.now() + serverOffset, lots: homeLotsCache };
+  } else {
+    app.innerHTML = `<div class="hero"><h1>${t('hero_h')}</h1><p>${t('hero_p')}</p></div><p class="note">${t('loading')}</p>`;
+    data = await api('/api/lots');
+    serverOffset = data.now - Date.now();
+    homeLotsCache = data.lots;
+    lastHomeSig = lotsSig(data.lots);
+  }
+  const mainAll = data.lots.filter((l) => l.zone === 'main' && l.status === 'active');
+  const overseas = data.lots.filter((l) => l.zone === 'overseas' && l.status === 'active');
+  const flash = data.lots.filter((l) => l.zone === 'flash' && l.status === 'active');
+  const catCounts = {};
+  for (const l of mainAll) { const c = l.category || 'Other'; catCounts[c] = (catCounts[c] || 0) + 1; }
+  const cats = Object.keys(catCounts).sort((a, b) => catCounts[b] - catCounts[a] || a.localeCompare(b));
+  if (homeCat !== 'all' && !catCounts[homeCat]) homeCat = 'all';
+  const main = homeFilterSort(homeCat === 'all' ? mainAll : mainAll.filter((l) => (l.category || 'Other') === homeCat));
+  const ocatCounts = {};
+  for (const l of overseas) { const c = l.category || 'Other'; ocatCounts[c] = (ocatCounts[c] || 0) + 1; }
+  const ocats = Object.keys(ocatCounts).sort((a, b) => ocatCounts[b] - ocatCounts[a] || a.localeCompare(b));
+  if (homeCatOverseas !== 'all' && !ocatCounts[homeCatOverseas]) homeCatOverseas = 'all';
+  const overseasShown = homeFilterSort(homeCatOverseas === 'all' ? overseas : overseas.filter((l) => (l.category || 'Other') === homeCatOverseas));
+  let zoneBody;
+  if (homeZone === 'overseas') {
+    zoneBody = `<section class="overseas-zone solo">
+      <h2 class="zone-title"><span class="overseas-badge">OVERSEAS</span>${t('overseas_zone')}</h2>
+      <p class="overseas-banner">${t('overseas_banner')}</p>
+      <div class="sourcing-banner"><h3>${t('sourcing_title')}</h3><p>${t('sourcing_body')}</p><a class="btn small" href="#/contact">${t('sourcing_btn')}</a></div>
+      ${overseas.length ? `${homeToolbarHtml()}<div class="cat-row"><button class="btn small ${homeCatOverseas === 'all' ? '' : 'secondary'} ocat-btn" data-ocat="all">${t('cat_all')} (${overseas.length})</button>${ocats.map((c) => `<button class="btn small ${homeCatOverseas === c ? '' : 'secondary'} ocat-btn" data-ocat="${esc(c)}">${esc(c)} (${ocatCounts[c]})</button>`).join('')}</div>
+      <div class="grid" id="home-grid-overseas">${homeGridHtml(overseasShown, homeLimitOverseas)}</div><div id="home-more-wrap">${homeMoreHtml(overseasShown.length, homeLimitOverseas, 'overseas')}</div>` : `<p class="note">${t('overseas_empty')}</p>`}
+    </section>`;
+  } else if (homeZone === 'flash') {
+    zoneBody = `<section class="flash-zone solo">
+      <h2 class="zone-title"><span class="flash-badge">FLASH</span>${t('flash_zone')}</h2>
+      ${flash.length ? `<div class="grid">${flash.map(lotCard).join('')}</div>` : `<p class="note">${t('flash_empty')}</p><p><a class="btn small" href="#local">${t('view_local')}</a></p>`}
+    </section>`;
+  } else {
+    const soon = [...mainAll].filter((l) => l.ends_at > nowMs()).sort((a, b) => a.ends_at - b.ends_at).slice(0, 8);
+    const soonRail = soon.length ? `<h2 class="zone-title soon-h"><span class="dot"></span>${t('ending_soon_h')}</h2>
+    <div class="soon-rail">${soon.map((l) => `<a class="soon-card" href="#/lot/${l.id}"><span class="soon-photo"><img src="${esc(l.images[0] || '')}" alt="${esc(l.title)}" loading="lazy"></span><span class="soon-info"><span class="soon-title">${esc(l.title)}</span><span class="soon-meta"><strong>${fmt(l.current_cents)}</strong><span data-ends="${l.ends_at}">${fmtLeft(l.ends_at - nowMs())}</span></span></span></a>`).join('')}</div>` : '';
+    zoneBody = `${soonRail}${homeToolbarHtml()}<div class="cat-row"><button class="btn small ${homeCat === 'all' ? '' : 'secondary'} cat-btn" data-cat="all">${t('cat_all')} (${mainAll.length})</button>${cats.map((c) => `<button class="btn small ${homeCat === c ? '' : 'secondary'} cat-btn" data-cat="${esc(c)}">${esc(c)} (${catCounts[c]})</button>`).join('')}</div>
+    <h2 class="zone-title"><span class="dot"></span>${t('main_zone')}</h2>
+    <p class="overseas-banner">${t('local_banner')}</p>
+    <p class="note" style="margin-top:-8px">${t('per_lot_time')}</p>
+    <div class="grid" id="home-grid">${homeGridHtml(main, homeLimit)}</div><div id="home-more-wrap">${homeMoreHtml(main.length, homeLimit, 'local')}</div>`;
+  }
+  app.innerHTML = `
+    <div class="hero"><h1>${t('hero_h')}</h1><p>${t('hero_p')}</p><p class="hero-stat"><span class="live-dot"></span><strong>${mainAll.length + overseas.length + flash.length}</strong>&nbsp;${t('live_now')}</p></div>
+    ${zoneBody}`;
+  paintZoneTabs({ local: mainAll.length, overseas: overseas.length, flash: flash.length });
+  bindQbForms(app);
+  const hs = $('#home-search');
+  if (hs) hs.addEventListener('input', (e) => { homeQuery = e.target.value; homeLimit = 60; homeLimitOverseas = 60; refreshHomeGrids(); });
+  const hsort = $('#home-sort');
+  if (hsort) hsort.addEventListener('change', (e) => { homeSort = e.target.value; refreshHomeGrids(); });
+  bindMoreButtons();
   $$('.cat-btn').forEach((b) => b.addEventListener('click', () => {
     homeCat = b.dataset.cat;
     pageHome();
@@ -518,6 +609,7 @@ async function pageLot(id) {
     app.innerHTML = `<p><a href="#/">${t('back')}</a></p><div class="empty">${t('ended')}</div>`;
     return;
   }
+  document.title = `${lot.title} · Kanstar Daily Auction`;
   const me = identity();
   const ended = lot.status === 'ended' || lot.ends_at <= nowMs();
   const minNext = lot.has_bids ? lot.current_cents + 50 : lot.start_cents;
@@ -1298,6 +1390,41 @@ function showInstallBanner() {
 // iOS Safari never fires beforeinstallprompt — offer the hint once per session.
 window.addEventListener('load', () => { setTimeout(showInstallBanner, 1500); });
 
+/* Silent home refresh: unsold lots auto-relist server-side when a round
+   ends, so a tab left open would otherwise keep the old ends_at and paint
+   everything ENDED. Refetch when the tab becomes visible again, on window
+   focus, and every 60s; re-render only when something actually changed
+   and the visitor is not typing in a form. */
+function homeRouteActive() {
+  const hash = location.hash || '#/';
+  const parts = hash.replace(/^#\//, '').split('/');
+  const known = ['lot', 'my-bids', 'rules', 'contact', 'my-messages', 'checkout', 'seller'];
+  return !!ZONE_HASH[hash] || hash === '#/' || hash === '#' || !known.includes(parts[0]);
+}
+let silentRefreshBusy = false;
+async function silentHomeRefresh() {
+  if (document.hidden || silentRefreshBusy || !homeRouteActive()) return;
+  const a = document.activeElement;
+  if (a && app.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+  silentRefreshBusy = true;
+  try {
+    const data = await api('/api/lots');
+    serverOffset = data.now - Date.now();
+    const sig = lotsSig(data.lots);
+    if (lastHomeSig && sig !== lastHomeSig) {
+      homeLotsCache = data.lots;
+      lastHomeSig = sig;
+      const y = window.scrollY;
+      await pageHome(true);
+      window.scrollTo(0, y);
+    }
+  } catch {}
+  silentRefreshBusy = false;
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) silentHomeRefresh(); });
+window.addEventListener('focus', silentHomeRefresh);
+setInterval(silentHomeRefresh, 60000);
+
 /* ------------------------------- router ------------------------------ */
 function setNav(key) { $$('.main-nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === key)); }
 async function render() {
@@ -1328,4 +1455,9 @@ async function render() {
 window.addEventListener('hashchange', render);
 applyI18nStatic();
 handlePaymentReturn();
+/* Clean lot URLs (/lot/123) are what social shares and ads hand out; the
+   server answers them with per-lot OG tags + this same SPA. Translate the
+   path into the hash route the router understands. */
+const lotPathMatch = location.pathname.match(/^\/lot\/(\d+)\/?$/);
+if (lotPathMatch && !location.hash) history.replaceState(null, '', '/#/lot/' + lotPathMatch[1]);
 render();
